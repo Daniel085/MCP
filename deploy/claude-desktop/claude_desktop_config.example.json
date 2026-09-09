@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "items": {
+      "command": "node",
+      "args": ["/abs/path/to/templates/typescript/dist/index.js"],
+      "env": {
+        "API_BASE_URL": "https://api.example.com",
+        "API_KEY": "replace-me-or-use-a-keychain-wrapper"
+      }
+    },
+    "items-python": {
+      "command": "uv",
+      "args": ["--directory", "/abs/path/to/templates/python", "run", "mcp-server"],
+      "env": {
+        "API_BASE_URL": "https://api.example.com",
+        "API_KEY": "replace-me-or-use-a-keychain-wrapper"
+      }
+    }
+  }
+}
