@@ -44,11 +44,26 @@ Then point a client at it. The fastest check is the MCP Inspector:
 npx @modelcontextprotocol/inspector node templates/typescript/dist/index.js
 ```
 
+## Documentation
+
+| Guide | Read it for |
+| --- | --- |
+| `docs/00-overview.md` | What this toolkit is, how a request flows through it, and how the pieces fit. Start here. |
+| `docs/01-concepts.md` | MCP in one page: roles, tools, transports, lifecycle. |
+| `docs/02-design-tools-from-an-api.md` | Turning an API into a small set of tools a model can use well. |
+| `docs/03-build.md` | Template anatomy and the steps to adapt it. |
+| `docs/04-test.md` | Unit, smoke, Inspector, and Claude Code testing. |
+| `docs/05-deploy.md` | stdio installs, Streamable HTTP hosting, auth, client registration. |
+| `docs/06-security.md` | Credentials, inputs, destructive tools, prompt injection. |
+| `docs/07-checklist.md` | Definition of done for a new server. |
+| `docs/08-worked-example.md` | Full adaptation to a realistic helpdesk API, both languages, with tested code. |
+| `docs/09-alternatives.md` | Public generators, gateways, and templates, and when to use them instead. |
+
 ## Building a server for a real API
 
-1. Read `docs/01-concepts.md` if MCP is new to you.
+1. Read `docs/00-overview.md`, then `docs/01-concepts.md` if MCP is new to you.
 2. Work through `docs/02-design-tools-from-an-api.md` to decide which endpoints become tools and how they are shaped.
-3. Follow `docs/03-build.md` to copy a template and replace the example tools.
+3. Follow `docs/03-build.md` to copy a template and replace the example tools. `docs/08-worked-example.md` shows every change for a realistic API.
 4. Test with `docs/04-test.md`, deploy with `docs/05-deploy.md`, and review `docs/06-security.md`.
 5. Tick through `docs/07-checklist.md` before calling it done.
 
