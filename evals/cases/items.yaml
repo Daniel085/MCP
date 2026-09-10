@@ -1,0 +1,56 @@
+# Tool-selection cases for the template's Items server.
+#
+# Run from the repo root, after building the TypeScript template and starting
+# its fake API:
+#
+#   (cd templates/typescript && npm run build && npm run fake-api &)
+#   cd evals && uv run mcp-evals cases/items.yaml
+#
+# To test the Python template instead, replace the server block with:
+#   command: uv
+#   args: ["--directory", "../templates/python", "run", "mcp-server"]
+
+server:
+  command: node
+  args: ["../templates/typescript/dist/index.js"]
+  env:
+    API_BASE_URL: ${API_BASE_URL:-http://127.0.0.1:4010}
+    MCP_TRANSPORT: stdio
+    LOG_LEVEL: warn
+
+cases:
+  - name: search by topic uses list_items with a query
+    prompt: "Is there an item called Gizmo?"
+    expect:
+      first_tool: list_items
+      args_include: { query: gizmo }
+
+  - name: known id goes straight to get_item
+    prompt: "Show me item itm_2."
+    expect:
+      first_tool: get_item
+      args_include: { id: itm_2 }
+      answer_contains: Gadget
+
+  - name: browse uses list_items without a query
+    prompt: "What items are there?"
+    expect:
+      first_tool: list_items
+      answer_contains: Widget
+
+  - name: create only after the user has given a name
+    prompt: "Create an item named Sprocket with the description 'spare part'."
+    expect:
+      tools: [create_item]
+      args_include: { name: Sprocket }
+
+  - name: unsupported action is declined rather than misusing a tool
+    prompt: "Delete item itm_1."
+    expect:
+      no_tool: true
+
+  - name: missing id is reported, not retried blindly
+    prompt: "Fetch item itm_404."
+    expect:
+      first_tool: get_item
+      answer_contains: not found

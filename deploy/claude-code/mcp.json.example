@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "items-local": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${CLAUDE_PROJECT_DIR:-.}/templates/typescript/dist/index.js"],
+      "env": {
+        "API_BASE_URL": "${API_BASE_URL:-http://127.0.0.1:4010}",
+        "API_KEY": "${API_KEY}",
+        "LOG_LEVEL": "info"
+      }
+    },
+    "items-python": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["--directory", "templates/python", "run", "mcp-server"],
+      "env": {
+        "API_BASE_URL": "${API_BASE_URL:-http://127.0.0.1:4010}",
+        "API_KEY": "${API_KEY}"
+      }
+    },
+    "items-remote": {
+      "type": "http",
+      "url": "${MCP_SERVER_URL:-https://mcp.example.com/mcp}",
+      "headers": {
+        "Authorization": "Bearer ${MCP_AUTH_TOKEN}"
+      }
+    }
+  }
+}

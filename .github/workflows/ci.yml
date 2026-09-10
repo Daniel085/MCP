@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  typescript:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: templates/typescript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: templates/typescript/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Smoke test over stdio
+        run: |
+          npm run fake-api &
+          for i in $(seq 1 20); do curl -sf http://127.0.0.1:4010/items >/dev/null && break; sleep 0.5; done
+          npm run smoke
+      - run: npm audit --audit-level=high
+
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: templates/python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --extra dev
+      - run: uv run ruff check src tests
+      - run: uv run pytest
+      - name: Smoke test over stdio
+        run: |
+          uv run fake-api &
+          for i in $(seq 1 20); do curl -sf http://127.0.0.1:4010/items >/dev/null && break; sleep 0.5; done
+          uv run smoke
+
+  evals:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: evals
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --extra dev
+      - run: uv run ruff check src tests
+      - run: uv run pytest
+
+  docker:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        template: [typescript, python]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t mcp-${{ matrix.template }} templates/${{ matrix.template }}
