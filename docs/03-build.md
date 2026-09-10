@@ -11,6 +11,7 @@ Both templates have the same structure. Pick the language your team maintains be
 | Upstream API client | `src/api-client.ts` | `src/mcp_server/api_client.py` |
 | Configuration from env | `src/config.ts` | `src/mcp_server/config.py` |
 | Tools, one file per group | `src/tools/items.ts` | `src/mcp_server/tools/items.py` |
+| Shared error mapping | `src/tools/errors.ts` | `src/mcp_server/tools/errors.py` |
 | Streamable HTTP app and auth | `src/http.ts` | `src/mcp_server/http.py` |
 | Fake upstream API for local runs and tests | `src/fake-api.ts` | `src/mcp_server/fake_api.py` |
 | Tests | `test/*.test.ts` (vitest) | `tests/test_*.py` (pytest) |
@@ -88,7 +89,7 @@ In Python, returning a Pydantic model or a dict produces both text and structure
 
 ## Step 4: Handle errors in one place
 
-Both templates wrap tool bodies in a helper that catches `ApiError` and returns an `isError` result with the mapped message. Use it for every tool so behaviour stays consistent. See `withErrorHandling` in `src/tools/items.ts` and `api_error_to_tool_error` in `src/mcp_server/tools/items.py`.
+Both templates keep the mapping in one module so every tool behaves the same: `withErrorHandling` in `src/tools/errors.ts` wraps a tool body and returns an `isError` result for `ApiError`; `api_error_to_tool_error` in `src/mcp_server/tools/errors.py` converts an `ApiError` into a `ToolError` to raise. Edit the status-to-text mapping there, not in the tools.
 
 ## Step 5: Configuration
 

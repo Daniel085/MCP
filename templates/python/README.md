@@ -25,7 +25,8 @@ Without `uv`: `python -m venv .venv && . .venv/bin/activate && pip install -e ".
 | --- | --- |
 | `src/mcp_server/__main__.py` | Entry point. Reads config, picks stdio or HTTP. |
 | `src/mcp_server/server.py` | Creates the `MCPServer` and registers tools. |
-| `src/mcp_server/tools/items.py` | Example tools and the error-mapping helper. Replace with your own. |
+| `src/mcp_server/tools/items.py` | Example tools. Replace with your own. |
+| `src/mcp_server/tools/errors.py` | Maps upstream failures to `ToolError`. Shared by all tools. |
 | `src/mcp_server/api_client.py` | Upstream HTTP client (httpx). Owns auth headers and timeouts. |
 | `src/mcp_server/http.py` | Starlette app: `/healthz`, bearer auth middleware, stateless `/mcp`. |
 | `src/mcp_server/config.py` | Environment variable parsing. |

@@ -12,6 +12,7 @@ This repository is the generic base. To build a real server for a specific API, 
 | `templates/typescript/` | Runnable TypeScript server (`@modelcontextprotocol/sdk`) with stdio and Streamable HTTP transports, a fake API for offline testing, tests, and a Dockerfile. |
 | `templates/python/` | The same server in Python (`mcp` 2.x, `MCPServer`), with stdio and Streamable HTTP, a fake API, tests, and a Dockerfile. |
 | `deploy/` | Client configuration examples: Claude Code, Claude Desktop, the Claude API MCP connector, and Docker Compose. |
+| `evals/` | Tool-selection evals: YAML prompts and expectations run through the Claude API against any stdio MCP server, to check the model picks the right tool. |
 | `CLAUDE.md` | Working conventions for Claude Code sessions in this repository. |
 
 ## Quick start

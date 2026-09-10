@@ -24,7 +24,8 @@ Try it in the Inspector: `npm run inspect`.
 | --- | --- |
 | `src/index.ts` | Entry point. Reads config, picks stdio or HTTP. |
 | `src/server.ts` | Creates the `McpServer` and registers tools. |
-| `src/tools/items.ts` | Example tools and the error-mapping helper. Replace with your own. |
+| `src/tools/items.ts` | Example tools. Replace with your own. |
+| `src/tools/errors.ts` | Maps upstream failures to `isError` results. Shared by all tools. |
 | `src/api-client.ts` | Upstream HTTP client. Owns auth headers and timeouts. |
 | `src/http.ts` | Express app: `/healthz`, bearer auth, stateless `/mcp`. |
 | `src/config.ts` | Environment variable parsing. |

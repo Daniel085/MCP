@@ -61,6 +61,30 @@ npx @modelcontextprotocol/inspector
 
 Check: the tool list reads well, descriptions make sense out of context, a bad ID gives a helpful error, and nothing appears in the server's stdout.
 
+## Tool-selection evals (needs an API key)
+
+Unit tests prove tools work when called. They say nothing about whether the model will call them, and that depends on the descriptions. `evals/` closes the gap: a YAML file of user-style prompts and expectations, run through the Claude API with your server's tools attached, graded on which tool was called with which arguments.
+
+```bash
+(cd templates/typescript && npm run build && npm run fake-api &)
+cd evals && uv sync --extra dev
+uv run mcp-evals cases/items.yaml
+```
+
+```yaml
+- name: search by topic uses list_items with a query
+  prompt: "Is there an item called Gizmo?"
+  expect:
+    first_tool: list_items
+    args_include: { query: gizmo }
+- name: unsupported action is declined rather than misusing a tool
+  prompt: "Delete item itm_1."
+  expect:
+    no_tool: true
+```
+
+Run it after every change to a tool description. When a case fails, the fix is almost always a sentence in the description ("use X when ..., use Y when ..."), not code. See `evals/README.md` for the case format and a failure-to-fix table. The harness's own tests run in CI without an API key; the cases themselves cost real API calls and run on demand.
+
 ## Claude Code (manual)
 
 Add the server for the current project only, try it, then remove it:
@@ -84,3 +108,4 @@ Watch how the model picks tools. If it calls the wrong one or fills arguments ba
 - Tests run in under 10 seconds and need no network.
 - The smoke test runs in CI.
 - Someone who has never seen the API can read `tools/list` and guess what each tool does.
+- An evals file exists with one case per row of your "prompts to try" table, and it passes on the model you deploy with.
