@@ -33,6 +33,7 @@ export interface TestSetup {
   envRefreshToken?: string;
   staticAccessToken?: string;
   experienceId?: string;
+  usageLog?: string;
 }
 
 export function writeTokenFile(file: string, tokens: Partial<StoredTokens> & { auth_base_url: string }): void {
@@ -58,6 +59,8 @@ export function buildContext(baseUrl: string, setup: TestSetup = {}): { ctx: Too
   if (userToken === "expired") writeTokenFile(tokenFile, { auth_base_url: baseUrl, access_token: "expired-token", expires_at: Date.now() - 1000 });
 
   const config = loadConfig({
+    ALIANZA_CONFIG_FILE: path.join(dir, "no-config.json"),
+    ALIANZA_USAGE_LOG: setup.usageLog ?? "off",
     ALIANZA_API_BASE_URL: baseUrl,
     ALIANZA_AUTH_BASE_URL: baseUrl,
     ALIANZA_CLIENT_ID: setup.clientCredentials === false ? "" : "test-client",

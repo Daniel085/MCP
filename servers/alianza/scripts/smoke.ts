@@ -28,6 +28,8 @@ const transport = new StdioClientTransport({
     ALIANZA_EXPERIENCE_ID: "e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1",
     ALIANZA_REFRESH_TOKEN: "rt-good",
     ALIANZA_TOKEN_FILE: tokenFile,
+    ALIANZA_CONFIG_FILE: path.join(path.dirname(tokenFile), "no-config.json"),
+    ALIANZA_USAGE_LOG: "off",
     MCP_TRANSPORT: "stdio",
     LOG_LEVEL: "warn",
   },

@@ -11,7 +11,10 @@
     "alianza-mcp": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "BETA-SETUP.md",
+    "DESIGN.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -23,7 +26,10 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
-    "login": "tsx src/index.ts login"
+    "login": "tsx src/index.ts login",
+    "prepublishOnly": "npm run build && npm test",
+    "setup": "tsx src/index.ts setup",
+    "doctor": "tsx src/index.ts doctor"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "~1.30.0",
@@ -36,5 +42,14 @@
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
     "vitest": "^5.0.0"
-  }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "alianza",
+    "claude"
+  ]
 }

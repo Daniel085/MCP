@@ -5,6 +5,8 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { ApiError, AuthError } from "../api-client.js";
 import { log } from "../log.js";
+import { usage } from "../usage.js";
+import { MissingInputError } from "./context.js";
 
 const SCOPE_BY_PATH: Array<[RegExp, string]> = [
   [/assignability/, "experience-assignability:check"],
@@ -50,18 +52,29 @@ export async function withErrorHandling(
   fn: () => Promise<CallToolResult>,
   context?: { path?: string },
 ): Promise<CallToolResult> {
+  const started = Date.now();
+  const ms = () => Date.now() - started;
   try {
-    return await fn();
+    const result = await fn();
+    usage.record({ tool: toolName, outcome: result.isError ? "error" : "ok", ms: ms() });
+    return result;
   } catch (err) {
     if (err instanceof ApiError) {
       log.warn("tool returned error", { tool: toolName, status: err.status, message: err.message, traceId: err.details.traceId });
+      usage.record({ tool: toolName, outcome: err.status === 401 || err.status === 403 ? "auth" : "error", ms: ms(), status: err.status });
       return { content: [{ type: "text", text: apiErrorToText(err, context) }], isError: true };
     }
     if (err instanceof AuthError) {
       log.warn("tool blocked by auth", { tool: toolName, message: err.message });
+      usage.record({ tool: toolName, outcome: "auth", ms: ms() });
+      return { content: [{ type: "text", text: err.message }], isError: true };
+    }
+    if (err instanceof MissingInputError) {
+      usage.record({ tool: toolName, outcome: "error", ms: ms() });
       return { content: [{ type: "text", text: err.message }], isError: true };
     }
     log.error("tool crashed", { tool: toolName, error: String(err) });
+    usage.record({ tool: toolName, outcome: "crash", ms: ms() });
     throw err;
   }
 }

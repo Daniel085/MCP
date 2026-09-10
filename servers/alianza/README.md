@@ -20,6 +20,24 @@ Scope: the Crux API only (`/experience/*` and `/users`). The separate Alianza Pu
 | `alianza_delete_assignment` | Destructive; hosts confirm. |
 | `alianza_list_users`, `alianza_get_user` | Unified users, with `count` for seat totals. |
 
+## Beta customers: start with BETA-SETUP.md
+
+`BETA-SETUP.md` is the customer-facing guide: `npx -y alianza-mcp setup`, `install`, `doctor`. Everything below is for people working on the server.
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `alianza-mcp` | Run the MCP server (stdio by default). |
+| `alianza-mcp setup` | Collect credentials into `~/.config/alianza-mcp/config.json`, explain redirect-URI registration, sign in. Scriptable with flags and `--yes`. |
+| `alianza-mcp login` | Sign in via Authorization Code + PKCE. |
+| `alianza-mcp install claude-code` / `claude-desktop` | Register the server with a Claude client. `--print` to preview. |
+| `alianza-mcp doctor` | Check Node, config, both credential kinds against the API, usage log. Non-zero exit on failure. |
+| `alianza-mcp usage` | Summarise the local usage log (tool names and outcomes only). |
+| `alianza-mcp auth-status` | Credential status as JSON. |
+
+Configuration precedence is defaults, then the config file, then environment variables, so containers keep working with env vars alone.
+
 ## Credentials
 
 The Crux API uses OAuth 2.0 with two token kinds. The server handles both; tools never see tokens.
@@ -29,6 +47,8 @@ The Crux API uses OAuth 2.0 with two token kinds. The server handles both; tools
 | Eligibility checks | `ALIANZA_CLIENT_ID` and `ALIANZA_CLIENT_SECRET` (client credentials, `experience-assignability:check`). |
 | Everything else | A user-context token. Run `alianza-mcp login` once; it opens the browser (Authorization Code + PKCE), stores the tokens in `ALIANZA_TOKEN_FILE` (default `~/.config/alianza-mcp/tokens.json`), and the server refreshes them automatically. |
 | Headless deployments | `ALIANZA_REFRESH_TOKEN` instead of the token file. |
+
+Customers register the redirect URI themselves by asking Alianza; `setup` prints the exact request to send.
 
 The `login` command needs a loopback redirect URI registered with Alianza for your client (default `http://127.0.0.1:8765/callback`; change with `ALIANZA_REDIRECT_URI`). Pass `--login-hint +14155551234` so home-realm discovery sends the user to the right identity provider.
 
@@ -89,7 +109,9 @@ Same as the template: `MCP_TRANSPORT=http`, `MCP_AUTH_TOKEN` for the bearer, `MC
 
 | File | Role |
 | --- | --- |
-| `src/index.ts` | Entry point: server, `login`, `auth-status`. |
+| `src/index.ts` | Entry point and command dispatch. |
+| `src/cli/*.ts` | `setup`, `install`, `doctor`, flag parsing, prompts. |
+| `src/usage.ts` | Local usage log and summary. |
 | `src/auth.ts` | Token manager: client credentials, refresh, token file. |
 | `src/login.ts` | Authorization Code + PKCE on a loopback redirect. |
 | `src/api-client.ts` | Crux endpoints, problem-details errors, one 401 retry after refresh. |

@@ -1,7 +1,12 @@
 /**
- * Configuration from environment variables. Alianza-specific settings plus
- * the transport settings inherited from the template.
+ * Configuration: defaults < config file < environment variables.
+ *
+ * The config file (~/.config/alianza-mcp/config.json by default, written by
+ * `alianza-mcp setup`) is what lets beta customers run the server with no
+ * environment variables at all. Environment variables still override it, so
+ * containers and CI work the same way as before.
  */
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -12,7 +17,24 @@ const DEFAULTS: Record<AlianzaEnv, { api: string; auth: string }> = {
   production: { api: "https://api.alianza.com", auth: "https://auth.alianza.com" },
 };
 
+export const DEFAULT_REDIRECT_URI = "http://127.0.0.1:8765/callback";
+export const DEFAULT_SCOPES = "experience-connections:manage experience-assignments:manage users:manage offline_access";
+
+export interface FileConfig {
+  env?: AlianzaEnv;
+  apiBaseUrl?: string;
+  authBaseUrl?: string;
+  clientId?: string;
+  clientSecret?: string;
+  experienceId?: string;
+  redirectUri?: string;
+  scopes?: string;
+  tokenFile?: string;
+  usageLog?: string;
+}
+
 export interface Config {
+  configFile: string;
   env: AlianzaEnv;
   apiBaseUrl: string;
   authBaseUrl: string;
@@ -24,6 +46,8 @@ export interface Config {
   accessToken: string;
   redirectUri: string;
   scopes: string;
+  /** Path to the JSONL usage log, or null when disabled. */
+  usageLog: string | null;
   apiTimeoutMs: number;
   transport: "stdio" | "http";
   httpHost: string;
@@ -34,6 +58,32 @@ export interface Config {
   logLevel: "debug" | "info" | "warn" | "error";
 }
 
+export function configDir(): string {
+  return path.join(os.homedir(), ".config", "alianza-mcp");
+}
+
+export function defaultConfigFile(): string {
+  return path.join(configDir(), "config.json");
+}
+
+export function expandHome(p: string): string {
+  return p.startsWith("~/") ? path.join(os.homedir(), p.slice(2)) : p;
+}
+
+export function readConfigFile(file: string): FileConfig | null {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as FileConfig;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeConfigFile(file: string, config: FileConfig): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n", { mode: 0o600 });
+}
+
 function envInt(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
   const raw = env[name];
   if (raw === undefined || raw === "") return fallback;
@@ -42,12 +92,16 @@ function envInt(env: NodeJS.ProcessEnv, name: string, fallback: number): number 
   return n;
 }
 
-function expandHome(p: string): string {
-  return p.startsWith("~/") ? path.join(os.homedir(), p.slice(2)) : p;
-}
-
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const alianzaEnv = (env.ALIANZA_ENV ?? "sandbox") as AlianzaEnv;
+  const configFile = expandHome(env.ALIANZA_CONFIG_FILE || defaultConfigFile());
+  const file = readConfigFile(configFile) ?? {};
+  const pick = (envName: string, fileValue: string | undefined, fallback = ""): string => {
+    const v = env[envName];
+    if (v !== undefined && v !== "") return v;
+    return fileValue ?? fallback;
+  };
+
+  const alianzaEnv = pick("ALIANZA_ENV", file.env, "sandbox") as AlianzaEnv;
   if (alianzaEnv !== "sandbox" && alianzaEnv !== "production") {
     throw new Error(`ALIANZA_ENV must be "sandbox" or "production", got "${alianzaEnv}"`);
   }
@@ -60,20 +114,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error(`LOG_LEVEL must be debug|info|warn|error, got "${logLevel}"`);
   }
   const strip = (s: string) => s.replace(/\/+$/, "");
+  const usageLogRaw = pick("ALIANZA_USAGE_LOG", file.usageLog, path.join(configDir(), "usage.jsonl"));
+
   return {
+    configFile,
     env: alianzaEnv,
-    apiBaseUrl: strip(env.ALIANZA_API_BASE_URL || DEFAULTS[alianzaEnv].api),
-    authBaseUrl: strip(env.ALIANZA_AUTH_BASE_URL || DEFAULTS[alianzaEnv].auth),
-    clientId: env.ALIANZA_CLIENT_ID ?? "",
-    clientSecret: env.ALIANZA_CLIENT_SECRET ?? "",
-    experienceId: env.ALIANZA_EXPERIENCE_ID ?? "",
-    tokenFile: expandHome(env.ALIANZA_TOKEN_FILE || "~/.config/alianza-mcp/tokens.json"),
+    apiBaseUrl: strip(pick("ALIANZA_API_BASE_URL", file.apiBaseUrl, DEFAULTS[alianzaEnv].api)),
+    authBaseUrl: strip(pick("ALIANZA_AUTH_BASE_URL", file.authBaseUrl, DEFAULTS[alianzaEnv].auth)),
+    clientId: pick("ALIANZA_CLIENT_ID", file.clientId),
+    clientSecret: pick("ALIANZA_CLIENT_SECRET", file.clientSecret),
+    experienceId: pick("ALIANZA_EXPERIENCE_ID", file.experienceId),
+    tokenFile: expandHome(pick("ALIANZA_TOKEN_FILE", file.tokenFile, path.join(configDir(), "tokens.json"))),
     refreshToken: env.ALIANZA_REFRESH_TOKEN ?? "",
     accessToken: env.ALIANZA_ACCESS_TOKEN ?? "",
-    redirectUri: env.ALIANZA_REDIRECT_URI || "http://127.0.0.1:8765/callback",
-    scopes:
-      env.ALIANZA_SCOPES ||
-      "experience-connections:manage experience-assignments:manage users:manage offline_access",
+    redirectUri: pick("ALIANZA_REDIRECT_URI", file.redirectUri, DEFAULT_REDIRECT_URI),
+    scopes: pick("ALIANZA_SCOPES", file.scopes, DEFAULT_SCOPES),
+    usageLog: usageLogRaw === "off" || usageLogRaw === "false" ? null : expandHome(usageLogRaw),
     apiTimeoutMs: envInt(env, "API_TIMEOUT_MS", 15_000),
     transport,
     httpHost: env.MCP_HTTP_HOST ?? "127.0.0.1",

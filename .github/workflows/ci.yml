@@ -69,6 +69,7 @@ jobs:
           for i in $(seq 1 20); do curl -sf -o /dev/null -w "" http://127.0.0.1:4010/users -H "Authorization: Bearer static-user-token" && break; sleep 0.5; done
           npm run smoke
       - run: npm audit --audit-level=high
+      - run: npm pack --dry-run
       - run: docker build -t alianza-mcp .
 
   evals:
