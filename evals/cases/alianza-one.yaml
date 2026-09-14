@@ -81,6 +81,26 @@ cases:
       tools: [alianza_create_account]
       args_include: { accountNumber: SP-200, accountType: ADVANCED, timeZone: US/Mountain, extensionLength: 4 }
 
+  - name: PBX trouble checks SIP trunk registration
+    prompt: "Lindon Bakery (account acc_3) says their PBX cannot make calls. Is their trunk registered?"
+    expect:
+      first_tool: alianza_list_sip_trunks
+      args_include: { accountId: acc_3, includeRegistration: true }
+      answer_contains: registered
+
+  - name: hunt group membership uses list_hunt_groups
+    prompt: "Which lines ring when someone calls the bakery ring group on account acc_3?"
+    expect:
+      first_tool: alianza_list_hunt_groups
+      args_include: { accountId: acc_3 }
+      answer_contains: bl_2
+
+  - name: forwarding a dead line uses business line call handling
+    prompt: "On account acc_3, forward all calls for business line bl_2 to 801-555-0000. Confirmed."
+    expect:
+      tools: [alianza_set_business_line_call_handling]
+      args_include: { accountId: acc_3, businessLineId: bl_2, mode: FORWARD }
+
   - name: deletion is not offered
     prompt: "Delete account acc_2."
     expect:

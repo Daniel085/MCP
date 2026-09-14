@@ -4,15 +4,23 @@ import { connectTestClient, textOf } from "./helpers.js";
 const EXPECTED_TOOLS = [
   "alianza_add_phone_number",
   "alianza_create_account",
+  "alianza_create_business_line",
   "alianza_create_device_line",
+  "alianza_create_hunt_group",
+  "alianza_create_sip_trunk",
   "alianza_create_user",
   "alianza_get_account",
   "alianza_get_account_history",
+  "alianza_get_business_line",
   "alianza_get_partition",
   "alianza_get_phone_number",
+  "alianza_get_sip_trunk",
   "alianza_get_user",
+  "alianza_list_business_lines",
   "alianza_list_devices",
+  "alianza_list_hunt_groups",
   "alianza_list_phone_numbers",
+  "alianza_list_sip_trunks",
   "alianza_list_users",
   "alianza_list_voicemails",
   "alianza_reserve_phone_number",
@@ -20,7 +28,11 @@ const EXPECTED_TOOLS = [
   "alianza_search_available_numbers",
   "alianza_search_call_records",
   "alianza_search_number_orders",
+  "alianza_set_business_line_call_handling",
+  "alianza_set_business_line_port",
+  "alianza_set_hunt_group_failover",
   "alianza_set_phone_number_destination",
+  "alianza_update_hunt_group",
   "alianza_validate_address",
 ];
 
@@ -56,6 +68,13 @@ describe("tool registry", () => {
       "alianza_set_phone_number_destination",
       "alianza_create_device_line",
       "alianza_reserve_phone_number",
+      "alianza_create_business_line",
+      "alianza_set_business_line_port",
+      "alianza_set_business_line_call_handling",
+      "alianza_create_hunt_group",
+      "alianza_update_hunt_group",
+      "alianza_set_hunt_group_failover",
+      "alianza_create_sip_trunk",
     ];
     for (const name of EXPECTED_TOOLS) {
       const a = byName[name].annotations!;
@@ -199,7 +218,7 @@ describe("partition and accounts", () => {
     const result = await ctx.call("alianza_search_accounts", { query: "1", limit: 1 });
     const sc = result.structuredContent as { accounts: unknown[]; total: number };
     expect(sc.accounts).toHaveLength(1);
-    expect(sc.total).toBe(2);
+    expect(sc.total).toBe(3);
     expect(textOf(result)).toContain("offset=1");
   });
 
@@ -233,7 +252,7 @@ describe("partition and accounts", () => {
     });
     expect(result.isError).toBeFalsy();
     expect(result.structuredContent).toMatchObject({
-      id: "acc_3",
+      id: "acc_4",
       accountNumber: "SP-123",
       status: "ACTIVE",
       platformType: "CPE2",
@@ -242,7 +261,7 @@ describe("partition and accounts", () => {
     });
     expect(textOf(result)).toContain("alianza_create_user");
     const fetched = await ctx.call("alianza_get_account", { id: "SP-123", lookupBy: "AccountNumber" });
-    expect(fetched.structuredContent).toMatchObject({ id: "acc_3" });
+    expect(fetched.structuredContent).toMatchObject({ id: "acc_4" });
   });
 
   it("alianza_create_account surfaces upstream validation errors", async () => {

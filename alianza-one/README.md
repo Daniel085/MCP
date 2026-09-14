@@ -1,12 +1,12 @@
 # Alianza One MCP server
 
-An MCP server for the [Alianza One](https://infrastructure.developer.alianza.com/api-guides) cloud voice platform, built from this toolkit's TypeScript template on `@modelcontextprotocol/sdk` 1.30. It wraps the Alianza Public API v2 with 20 task-shaped tools for the work a service provider's support and provisioning staff actually do: find a customer, see their users, numbers, and devices, check call history and voicemail, track number ports and activations, and provision a new customer end to end.
+An MCP server for the [Alianza One](https://infrastructure.developer.alianza.com/api-guides) cloud voice platform, built from this toolkit's TypeScript template on `@modelcontextprotocol/sdk` 1.30. It wraps the Alianza Public API v2 with 32 task-shaped tools for the work a service provider's support and provisioning staff actually do: find a customer, see their users, numbers, and devices, check call history and voicemail, track number ports and activations, provision a new customer end to end, and manage Business Lines, their hunt groups, and SIP trunks.
 
 Runs over stdio for local hosts (Claude Code, Claude Desktop) or Streamable HTTP for remote deployment. Ships with a fake Alianza API so tests and local runs need no credentials.
 
 ## The API in one paragraph
 
-Alianza is multi-tenant. A **partition** is the service provider; it contains **accounts** (customers). An account contains **end users** (the call-routing object for Business Cloud Communications and Home Phone), **telephone numbers**, and **device lines** (IP phones and ATAs). Inbound calls to a number go to whatever the number *references* (usually an END_USER, sometimes a SIP trunk, IVR, hunt group, ...); all of a user's devices ring together. Every API path is scoped by partition id. Authentication is `POST /v2/authorize` with an Admin Portal username and password; the returned `authToken` goes in an `X-AUTH-TOKEN` header and is valid for 8 hours from last use. The login response also tells you your partition id.
+Alianza is multi-tenant. A **partition** is the service provider; it contains **accounts** (customers). An account contains **end users** (the call-routing object for Business Cloud Communications and Home Phone), **telephone numbers**, and **device lines** (IP phones and ATAs). The line-centric Business Lines product instead uses **Business Lines** on ATA ports, optionally grouped into **hunt groups**; PBX customers use **SIP trunks**. Inbound calls to a number go to whatever the number *references* (END_USER, BUSINESS_LINE, BUSINESS_LINE_HUNT_GROUP, SIP_TRUNK, IVR, ...); all of a user's devices ring together. Every API path is scoped by partition id. Authentication is `POST /v2/authorize` with an Admin Portal username and password; the returned `authToken` goes in an `X-AUTH-TOKEN` header and is valid for 8 hours from last use. The login response also tells you your partition id.
 
 | Environment | Base URL |
 | --- | --- |
@@ -15,7 +15,7 @@ Alianza is multi-tenant. A **partition** is the service provider; it contains **
 | Beta (default) | `https://api.b2.alianza.com` |
 | Production | `https://api.alianza.com` |
 
-Beta partitions are provisioned by your Alianza representative and have different partition, carrier, and calling plan ids from production. The full OpenAPI spec (472 operations) is at `https://api.alianza.com/v2/apidocs/`; this server wraps 21 of them.
+Beta partitions are provisioned by your Alianza representative and have different partition, carrier, and calling plan ids from production. The full OpenAPI spec (472 operations) is at `https://api.alianza.com/v2/apidocs/`; this server wraps about 40 of them.
 
 ## Run
 
@@ -73,6 +73,11 @@ Every tool takes an optional `partitionId` (defaults to the server's partition).
 | `alianza_search_available_numbers` | `GET /partition/{p}/telephonenumber/search` | `searchType`, `query?`, `latitude?`, `longitude?`, `functionType=ELS`, `maxResults=10` | inventory numbers[] with rate center and distance |
 | `alianza_validate_address` | `GET /v2/address/validate` | `address`, `postalCode?`, `country=USA` | parsed address fields, lat/long, valid flag, required fields |
 | `alianza_search_number_orders` | `GET /partition/{p}/telephonenumber/statussearch` | `accountId?`, `phoneNumber?`, `statuses?`, `orderTypes?`, `startDate?`, `endDate?`, `dateType`, `limit=20`, `offset` | activation / port orders with status, FOC date, latest log entry |
+| `alianza_list_business_lines` | `GET /account/{id}/business-line/views/expanded` (+ `registration` per line) | `accountId`, `includeRegistration=false`, `limit=50`, `offset` | lines[] with caller id, call handling summary, ATA port, SIP username |
+| `alianza_get_business_line` | `GET /business-line/{l}/views/expanded` + `registration` | `accountId`, `businessLineId` | one line with registration / locked-out flags |
+| `alianza_list_hunt_groups` | `GET /account/{id}/business-line-hunt-group` (+ `failover-action/{reason}` x3) | `accountId`, `includeFailover=false`, `limit=50`, `offset` | groups[] with strategy, timeout, ordered members, failover |
+| `alianza_list_sip_trunks` | `GET /account/{id}/siptrunk_2` (+ `registrationstatus` per trunk) | `accountId`, `includeRegistration=false`, `limit=50`, `offset` | trunks[] (never the SIP password) |
+| `alianza_get_sip_trunk` | `GET /siptrunk_2/{t}` + `registrationstatus` + `forward` | `accountId`, `sipTrunkId` | one trunk with registration and forwarding rules |
 
 ### Writes
 
@@ -84,6 +89,13 @@ Every tool takes an optional `partitionId` (defaults to the server's partition).
 | `alianza_set_phone_number_destination` | `PUT /account/{id}/telephonenumber/{tn}/destination` | `accountId`, `phoneNumber`, `referenceType`, `referenceId`, `assignAsCallerId=false` | idempotent |
 | `alianza_create_device_line` | `POST /account/{id}/deviceline` | `accountId`, `userId`, `deviceName`, `deviceTypeId`, `macAddress?`, `lineNumber=1`, `emergencyNumber?`, `faxEnabled=false` | not read-only, not destructive |
 | `alianza_reserve_phone_number` | `PUT` / `DELETE /partition/{p}/telephonenumber/{tn}/reserve` | `phoneNumber`, `action=reserve` \| release | idempotent, reversible |
+| `alianza_create_business_line` | `POST /account/{id}/business-line` (+ `POST port-assignment`) | `accountId`, `name`, `callerIdPhoneNumber`, `emergencyCallbackPhoneNumber?`, `callerIdVisible=true`, `deviceTypeId?`, `macAddress?`, `portNumber?`, `faxEnabled=false` | not read-only, not destructive |
+| `alianza_set_business_line_port` | `GET` then `POST` or `PUT /business-line/{l}/port-assignment` | `accountId`, `businessLineId`, `deviceTypeId`, `macAddress?`, `portNumber=1`, `faxEnabled=false` | idempotent |
+| `alianza_set_business_line_call_handling` | `GET` then `PUT /business-line/{l}/call-handling` | `accountId`, `businessLineId`, `mode?`, `forwardTo?`, `callWaiting?`, `busyAction?`, `unregisteredAction?`, `ringTimeoutSeconds?`, `noAnswerAction?`, forward-to numbers, `voicemailBoxId?` | idempotent; unspecified fields keep current values |
+| `alianza_create_hunt_group` | `POST /account/{id}/business-line-hunt-group` | `accountId`, `name`, `strategy=SIMULTANEOUS`, `members[]`, `ringTimeoutSeconds=20` | not read-only, not destructive |
+| `alianza_update_hunt_group` | `GET` then `PUT /business-line-hunt-group/{g}` | `accountId`, `huntGroupId`, `name?`, `strategy?`, `members?`, `ringTimeoutSeconds?` | idempotent |
+| `alianza_set_hunt_group_failover` | `PUT /business-line-hunt-group/{g}/failover-action/{reason}` | `accountId`, `huntGroupId`, `reason`, `action`, `forwardTo?`, `voicemailBoxId?` | idempotent |
+| `alianza_create_sip_trunk` | `POST /account/{id}/siptrunk_2` | `accountId`, `trunkName`, `sipUsername`, `sipPassword?` (generated if omitted), `concurrentCalls`, `primaryTn?`, `callbackNumber?`, `localServicesEnabled=false`, `extensionPatterns?` | not read-only, not destructive; returns the SIP password once |
 
 Nothing here deletes, suspends, or ports numbers. Those are deliberately out of scope for a first cut (see "Not wrapped" below).
 
@@ -99,6 +111,10 @@ The order the Alianza *Account Create via API* guide prescribes, as tool calls:
 6. `alianza_create_device_line` for each physical phone or ATA port
 7. `alianza_search_number_orders` to watch the activation complete
 
+For a Business Lines customer, replace steps 2 and 6 with `alianza_create_business_line` (with the ATA port) and, to ring several lines, `alianza_create_hunt_group`; route the number to the line or group in step 5. For a SIP trunk customer, replace them with `alianza_create_sip_trunk` and route numbers to the trunk.
+
+Thirty-two tools is above the "under 20" guideline in `../docs/02-design-tools-from-an-api.md`. The groups are independent (`src/tools/*.ts`); if a host struggles with the count, register only the groups a team needs in `src/server.ts`, or split Business Lines/SIP trunks into a second server.
+
 ### Prompts to try
 
 - "Find the Acme Dental account and tell me which of their phones are not registered."
@@ -107,6 +123,8 @@ The order the Alianza *Account Create via API* guide prescribes, as tool calls:
 - "Does Jane Doe have any unread voicemails?"
 - "Who suspended account HOME-2002?"
 - "Set up a new business account SP-200 for Lindon Bakery in US/Mountain with 4-digit extensions, add user Sam Lee ext 2000 on the Standard plan, and give them a Lindon number."
+- "Is the Lindon Bakery PBX registered, and where do its calls go if it drops?"
+- "Add a Kitchen line on port 2 of their ATA and put it in the bakery ring group."
 
 ## Files
 
@@ -117,11 +135,11 @@ The order the Alianza *Account Create via API* guide prescribes, as tool calls:
 | `src/config.ts` | Environment variable parsing; fails fast without credentials. |
 | `src/api-client.ts` | Alianza HTTP client: login, token cache and refresh, typed endpoint methods, error extraction. |
 | `src/alianza-types.ts` | The subset of Alianza schemas the tools read and write. |
-| `src/tools/partition.ts`, `accounts.ts`, `users.ts`, `numbers.ts`, `devices.ts`, `activity.ts` | The 20 tools, one file per domain. |
+| `src/tools/partition.ts`, `accounts.ts`, `users.ts`, `numbers.ts`, `devices.ts`, `activity.ts`, `business-lines.ts`, `hunt-groups.ts`, `sip-trunks.ts` | The 32 tools, one file per domain. |
 | `src/tools/common.ts` | Shared input fragments, phone/MAC normalisation, address formatting, paging. |
 | `src/tools/errors.ts` | Maps `ApiError` and input errors to `isError` results. |
 | `src/http.ts` | Express app: `/healthz`, bearer auth, stateless `/mcp`. |
-| `src/fake-api.ts`, `src/fake-data.ts` | In-memory Alianza API for tests and demos (login, two accounts, users, numbers, devices, CDRs, history, voicemail, orders, inventory). |
+| `src/fake-api.ts`, `src/fake-data.ts` | In-memory Alianza API for tests and demos (login, three accounts, users, numbers, devices, CDRs, history, voicemail, orders, inventory, business lines, hunt groups, SIP trunks). |
 | `scripts/smoke.ts` | Wire-level smoke test over stdio. |
 | `test/` | Vitest suites: tool registry, auth flow, every tool's success and failure paths, HTTP transport. |
 
@@ -142,8 +160,8 @@ Client configuration examples for Claude Code, Claude Desktop, and the Claude AP
 
 Answers to the questions in `../docs/06-security.md`:
 
-1. **Worst case for a compromised model.** It can create accounts, users, and device lines, and activate inventory numbers on any account in the partition, each of which can incur charges; it can reroute an existing number to a different user and change a user's caller id; and it can read call records, voicemail transcriptions, and E911 addresses for every customer. It cannot delete or suspend anything, port numbers, change passwords, or reach other partitions the login cannot see.
-2. **What the host confirms.** All six write tools carry `readOnlyHint: false`; hosts prompt on them. Descriptions instruct the model to confirm details with the user before creating or activating, and the server `instructions` say the same. Reads are `readOnlyHint: true` and run without prompts.
+1. **Worst case for a compromised model.** It can create accounts, users, device lines, Business Lines, hunt groups, and SIP trunks, and activate inventory numbers on any account in the partition, each of which can incur charges; it can reroute an existing number, change a user's caller id, change where a Business Line or hunt group forwards calls, and move a line to a different ATA port; and it can read call records, voicemail transcriptions, E911 addresses, and (once, at creation) a new SIP trunk's password. It cannot delete or suspend anything, port numbers, change user passwords, read existing SIP passwords, or reach other partitions the login cannot see.
+2. **What the host confirms.** All thirteen write tools carry `readOnlyHint: false`; hosts prompt on them. Descriptions instruct the model to confirm details with the user before creating or activating, and the server `instructions` say the same. Reads are `readOnlyHint: true` and run without prompts.
 3. **What logs and errors reveal.** Logs go to stderr as JSON with ids (partition, account, user, device, phone number) and upstream status codes, never credentials, tokens, or request bodies. Error text returned to the model carries Alianza's message but the 401 path replaces it with a fixed sentence so a bad password is never echoed.
 4. **Credential rotation.** The Alianza user is a normal Admin Portal user; rotate its password in the portal and restart the server (or set a fresh `ALIANZA_AUTH_TOKEN`). Only the deployment environment holds the secret. Scope the user to the smallest Alianza permission set that still allows the writes you want; drop write permission and the six write tools fail cleanly with a permission message.
 
@@ -154,7 +172,8 @@ Deliberately left out of the first cut, either because they are destructive, nee
 - Deleting or suspending accounts, users, numbers, or devices.
 - Porting numbers in (`port` object on the activation request), updating or cancelling ports, triggering ports, LOAs.
 - Password resets and voicemail PIN unlocks (they send email to the customer).
-- Business Lines, SIP trunks, hunt groups, IVRs, auto attendants, call queues, contact center.
+- Deleting Business Lines, hunt groups, or SIP trunks; hunt group star-code forward configurations; SIP trunk groups, forward-rule updates, IP-based auth, and unlock; business line voicemail boxes and SIP credential changes.
+- IVRs, auto attendants, call queues, contact center, virtual fax, specialty lines.
 - Bulk operations, reports, CSV exports, dynamic inventory orders, BYOTN.
 - Sub-partition management, calling plan products, device inventory management.
 

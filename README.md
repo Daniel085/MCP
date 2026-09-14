@@ -9,7 +9,7 @@ This repository is the generic base. To build a real server for a specific API, 
 | Path | Purpose |
 | --- | --- |
 | `docs/` | Step-by-step guides: concepts, tool design, building, testing, deployment, security, and a done checklist. |
-| `alianza-one/` | A real server built from the TypeScript template for the [Alianza One](https://infrastructure.developer.alianza.com/api-guides) cloud voice platform: 20 tools over accounts, users, numbers, devices, call records, and voicemail, with a fake Alianza API and tests. See `alianza-one/README.md`. |
+| `alianza-one/` | A real server built from the TypeScript template for the [Alianza One](https://infrastructure.developer.alianza.com/api-guides) cloud voice platform: 32 tools over accounts, users, numbers, devices, call records, voicemail, Business Lines, hunt groups, and SIP trunks, with a fake Alianza API and tests. See `alianza-one/README.md`. |
 | `templates/typescript/` | Runnable TypeScript server (`@modelcontextprotocol/sdk`) with stdio and Streamable HTTP transports, a fake API for offline testing, tests, and a Dockerfile. |
 | `templates/python/` | The same server in Python (`mcp` 2.x, `MCPServer`), with stdio and Streamable HTTP, a fake API, tests, and a Dockerfile. |
 | `deploy/` | Client configuration examples: Claude Code, Claude Desktop, the Claude API MCP connector, and Docker Compose. |

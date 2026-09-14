@@ -525,3 +525,125 @@ export interface AddressValidation {
   longitude?: string;
   valid?: boolean;
 }
+
+// ---- Business Lines ---------------------------------------------------------
+
+export interface BusinessLine {
+  id: string;
+  name: string;
+  accountId?: string;
+  partitionId?: string;
+  callerIdPhoneNumber?: string;
+  callerIdName?: string;
+  callerIdVisible?: boolean;
+  emergencyCallbackPhoneNumber?: string;
+}
+
+export type RingFailoverAction =
+  | { "@type": "BusyRingFailoverAction" }
+  | { "@type": "VoicemailRingFailoverAction" }
+  | { "@type": "ForwardRingFailoverAction"; forwardToPhoneNumber: string };
+
+export type RingTimeoutConfiguration =
+  | { "@type": "UnlimitedRingTimeoutConfiguration" }
+  | { "@type": "LimitedRingTimeoutConfiguration"; timeoutSeconds?: number; noAnswerAction: RingFailoverAction };
+
+export interface BusinessLineCallHandling {
+  activeCallHandling: "RING_LINE" | "FORWARD";
+  callWaitingEnabled?: boolean;
+  busyFailoverAction: RingFailoverAction;
+  unregisteredFailoverAction: RingFailoverAction;
+  ringTimeoutConfiguration: RingTimeoutConfiguration;
+  forwardToPhoneNumber?: string;
+  voicemailBoxId?: string;
+}
+
+export interface BusinessLinePortAssignment {
+  businessLineId?: string;
+  deviceTypeId: string;
+  macAddress?: string;
+  portNumber?: number;
+  faxEnabled?: boolean;
+}
+
+export interface BusinessLineExpanded extends BusinessLine {
+  cname?: string;
+  callHandling?: BusinessLineCallHandling;
+  sipCredentials?: { sipUsername?: string };
+  device?: BusinessLinePortAssignment;
+}
+
+export interface LineRegistrationStatus {
+  registered?: boolean;
+  lockedOut?: boolean;
+}
+
+// ---- Business Line Hunt Groups ----------------------------------------------
+
+export type HuntingConfiguration =
+  | {
+      "@type": "LinearHuntingConfiguration";
+      ringTimeoutSeconds: number;
+      members: Array<{ businessLineId: string; sequenceOrder: number }>;
+    }
+  | {
+      "@type": "SequentialHuntingConfiguration";
+      members: Array<{ businessLineId: string; sequenceOrder: number; ringTimeoutSeconds: number }>;
+    }
+  | { "@type": "SimultaneousHuntingConfiguration"; ringTimeoutSeconds: number; members: string[] };
+
+export interface HuntGroup {
+  id: string;
+  name: string;
+  partitionId?: string;
+  accountId?: string;
+  huntingConfiguration: HuntingConfiguration;
+  activeForwardConfigurationId?: string;
+}
+
+export type HuntGroupFailoverReason = "BUSY" | "NO_ANSWER" | "UNREGISTERED";
+
+export type HuntGroupFailoverAction =
+  | { "@type": "BusyFailoverAction"; failoverReason: HuntGroupFailoverReason }
+  | { "@type": "ForwardFailoverAction"; failoverReason: HuntGroupFailoverReason; forwardToPhoneNumber: string }
+  | { "@type": "VoicemailFailoverAction"; failoverReason: HuntGroupFailoverReason; voicemailBoxId: string };
+
+// ---- SIP Trunks -------------------------------------------------------------
+
+export interface SipTrunk {
+  id: string;
+  partitionId?: string;
+  accountId?: string;
+  trunkName: string;
+  sipUsername?: string;
+  sipPassword?: string;
+  callbackNumber?: string;
+  concurrentCalls?: number;
+  maxBurstCalls?: number;
+  callingPlans?: CallingPlan[];
+  telephoneNumbers?: string[];
+  sipProxyServer?: string;
+  lockedOut?: boolean;
+  localServicesEnabled?: boolean;
+  primaryTn?: string;
+  extensionPatterns?: string[];
+  provisioningStatus?: string;
+  ipBasedAuthEnabled?: boolean;
+  ipAddress?: string;
+  portNumber?: number;
+  sipTrunkGroupId?: string;
+  pbxTnDigits?: number;
+}
+
+export interface SipTrunkForwardReference {
+  referenceType: "SIP_TRUNK" | "END_USER" | "TELEPHONE" | "AUTO_ATTENDANT" | "IVR" | "BUSY" | "VOICE_MAIL";
+  referenceId?: string;
+  enabled?: boolean;
+}
+
+export interface SipTrunkForwardRules {
+  sipTrunkId?: string;
+  forwardAlways?: SipTrunkForwardReference;
+  forwardOnFailure?: SipTrunkForwardReference[];
+  forwardOnCapacityExceeded?: SipTrunkForwardReference[];
+}

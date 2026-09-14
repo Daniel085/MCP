@@ -12,6 +12,16 @@ import type { Config } from "./config.js";
 import { log } from "./log.js";
 import type {
   Account,
+  BusinessLine,
+  BusinessLineCallHandling,
+  BusinessLineExpanded,
+  BusinessLinePortAssignment,
+  HuntGroup,
+  HuntGroupFailoverAction,
+  HuntGroupFailoverReason,
+  LineRegistrationStatus,
+  SipTrunk,
+  SipTrunkForwardRules,
   AccountHistorySearchResponse,
   AccountSearchHit,
   AddressValidation,
@@ -313,6 +323,166 @@ export class ApiClient {
     return this.request<DeviceRegistrationStatus>(
       "GET",
       `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/deviceline/${enc(deviceId)}/registrationstatus`,
+    );
+  }
+
+  // ---- Business lines -------------------------------------------------------
+
+  listBusinessLinesExpanded(partitionId: string, accountId: string): Promise<BusinessLineExpanded[]> {
+    return this.request<BusinessLineExpanded[]>(
+      "GET",
+      `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/business-line/views/expanded`,
+    );
+  }
+
+  getBusinessLineExpanded(partitionId: string, accountId: string, lineId: string): Promise<BusinessLineExpanded> {
+    return this.request<BusinessLineExpanded>(
+      "GET",
+      `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/business-line/${enc(lineId)}/views/expanded`,
+    );
+  }
+
+  createBusinessLine(partitionId: string, accountId: string, body: Partial<BusinessLine>): Promise<BusinessLine> {
+    return this.request<BusinessLine>("POST", `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/business-line`, {
+      body: { ...body, partitionId, accountId },
+    });
+  }
+
+  getBusinessLineRegistration(partitionId: string, accountId: string, lineId: string): Promise<LineRegistrationStatus> {
+    return this.request<LineRegistrationStatus>(
+      "GET",
+      `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/business-line/${enc(lineId)}/registration`,
+    );
+  }
+
+  getBusinessLineCallHandling(partitionId: string, accountId: string, lineId: string): Promise<BusinessLineCallHandling> {
+    return this.request<BusinessLineCallHandling>(
+      "GET",
+      `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/business-line/${enc(lineId)}/call-handling`,
+    );
+  }
+
+  setBusinessLineCallHandling(
+    partitionId: string,
+    accountId: string,
+    lineId: string,
+    body: BusinessLineCallHandling,
+  ): Promise<BusinessLineCallHandling> {
+    return this.request<BusinessLineCallHandling>(
+      "PUT",
+      `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/business-line/${enc(lineId)}/call-handling`,
+      { body },
+    );
+  }
+
+  getBusinessLinePort(partitionId: string, accountId: string, lineId: string): Promise<BusinessLinePortAssignment> {
+    return this.request<BusinessLinePortAssignment>(
+      "GET",
+      `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/business-line/${enc(lineId)}/port-assignment`,
+    );
+  }
+
+  setBusinessLinePort(
+    partitionId: string,
+    accountId: string,
+    lineId: string,
+    body: BusinessLinePortAssignment,
+    exists: boolean,
+  ): Promise<BusinessLinePortAssignment> {
+    return this.request<BusinessLinePortAssignment>(
+      exists ? "PUT" : "POST",
+      `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/business-line/${enc(lineId)}/port-assignment`,
+      { body: { ...body, businessLineId: lineId } },
+    );
+  }
+
+  // ---- Hunt groups ----------------------------------------------------------
+
+  listHuntGroups(partitionId: string, accountId: string): Promise<HuntGroup[]> {
+    return this.request<HuntGroup[]>(
+      "GET",
+      `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/business-line-hunt-group`,
+    );
+  }
+
+  getHuntGroup(partitionId: string, accountId: string, groupId: string): Promise<HuntGroup> {
+    return this.request<HuntGroup>(
+      "GET",
+      `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/business-line-hunt-group/${enc(groupId)}`,
+    );
+  }
+
+  createHuntGroup(partitionId: string, accountId: string, body: Omit<HuntGroup, "id">): Promise<HuntGroup> {
+    return this.request<HuntGroup>(
+      "POST",
+      `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/business-line-hunt-group`,
+      { body: { ...body, partitionId, accountId } },
+    );
+  }
+
+  updateHuntGroup(partitionId: string, accountId: string, body: HuntGroup): Promise<HuntGroup> {
+    return this.request<HuntGroup>(
+      "PUT",
+      `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/business-line-hunt-group/${enc(body.id)}`,
+      { body: { ...body, partitionId, accountId } },
+    );
+  }
+
+  getHuntGroupFailover(
+    partitionId: string,
+    accountId: string,
+    groupId: string,
+    reason: HuntGroupFailoverReason,
+  ): Promise<HuntGroupFailoverAction> {
+    return this.request<HuntGroupFailoverAction>(
+      "GET",
+      `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/business-line-hunt-group/${enc(groupId)}/failover-action/${reason}`,
+    );
+  }
+
+  setHuntGroupFailover(
+    partitionId: string,
+    accountId: string,
+    groupId: string,
+    body: HuntGroupFailoverAction,
+  ): Promise<HuntGroupFailoverAction> {
+    return this.request<HuntGroupFailoverAction>(
+      "PUT",
+      `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/business-line-hunt-group/${enc(groupId)}/failover-action/${body.failoverReason}`,
+      { body },
+    );
+  }
+
+  // ---- SIP trunks -----------------------------------------------------------
+
+  listSipTrunks(partitionId: string, accountId: string): Promise<SipTrunk[]> {
+    return this.request<SipTrunk[]>("GET", `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/siptrunk_2`);
+  }
+
+  getSipTrunk(partitionId: string, accountId: string, trunkId: string): Promise<SipTrunk> {
+    return this.request<SipTrunk>(
+      "GET",
+      `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/siptrunk_2/${enc(trunkId)}`,
+    );
+  }
+
+  createSipTrunk(partitionId: string, accountId: string, body: Partial<SipTrunk>): Promise<SipTrunk> {
+    return this.request<SipTrunk>("POST", `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/siptrunk_2`, {
+      body: { ...body, partitionId, accountId },
+    });
+  }
+
+  getSipTrunkRegistration(partitionId: string, accountId: string, trunkId: string): Promise<LineRegistrationStatus> {
+    return this.request<LineRegistrationStatus>(
+      "GET",
+      `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/siptrunk_2/${enc(trunkId)}/registrationstatus`,
+    );
+  }
+
+  getSipTrunkForwardRules(partitionId: string, accountId: string, trunkId: string): Promise<SipTrunkForwardRules> {
+    return this.request<SipTrunkForwardRules>(
+      "GET",
+      `/v2/partition/${enc(partitionId)}/account/${enc(accountId)}/siptrunk_2/${enc(trunkId)}/forward`,
     );
   }
 

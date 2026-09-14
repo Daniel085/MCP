@@ -14,7 +14,21 @@
  */
 import express, { type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
-import type { Account, CustomerServiceRecord, Device, EndUser, PhoneNumberOnAccount, TelephoneNumberActivation } from "./alianza-types.js";
+import type {
+  Account,
+  BusinessLine,
+  BusinessLineCallHandling,
+  BusinessLinePortAssignment,
+  CustomerServiceRecord,
+  Device,
+  EndUser,
+  HuntGroup,
+  HuntGroupFailoverAction,
+  HuntGroupFailoverReason,
+  PhoneNumberOnAccount,
+  SipTrunk,
+  TelephoneNumberActivation,
+} from "./alianza-types.js";
 import { FAKE_PARTITION_ID, FAKE_PASSWORD, FAKE_USERNAME, seed, type FakeState } from "./fake-data.js";
 
 function fail(res: Response, status: number, message: string): void {
@@ -592,6 +606,295 @@ export function createFakeApi() {
       return;
     }
     res.json({ registered: state.registrations[d.id] ?? false });
+  });
+
+  // ---- Business lines --------------------------------------------------------
+
+  const B = "/v2/partition/:partitionId/account/:accountId/business-line";
+  const expandLine = (l: BusinessLine) => ({
+    ...l,
+    cname: l.callerIdName,
+    callHandling: state.lineCallHandling[l.id],
+    sipCredentials: { sipUsername: `sip_${l.id}` },
+    device: state.linePorts[l.id],
+  });
+  const businessLine = (req: Request, res: Response) => {
+    const a = account(req, res);
+    if (!a) return undefined;
+    const l = state.businessLines.find((x) => x.accountId === a.id && x.id === req.params.businessLineId);
+    if (!l) fail(res, 404, `Business line ${req.params.businessLineId} not found`);
+    return l;
+  };
+
+  app.get(B, (req, res) => {
+    const a = account(req, res);
+    if (a) res.json(state.businessLines.filter((l) => l.accountId === a.id));
+  });
+  app.get(`${B}/views/expanded`, (req, res) => {
+    const a = account(req, res);
+    if (a) res.json(state.businessLines.filter((l) => l.accountId === a.id).map(expandLine));
+  });
+  app.post(B, (req, res) => {
+    const a = account(req, res);
+    if (!a) return;
+    const body = req.body as Partial<BusinessLine>;
+    if (!body.name) {
+      fail(res, 400, "name is required");
+      return;
+    }
+    for (const [field, tn] of [["callerIdPhoneNumber", body.callerIdPhoneNumber], ["emergencyCallbackPhoneNumber", body.emergencyCallbackPhoneNumber]] as const) {
+      if (tn && !state.numbers.some((n) => n.accountId === a.id && n.phoneNumber === tn)) {
+        fail(res, 400, `${field} ${tn} is not on this account`);
+        return;
+      }
+    }
+    const created: BusinessLine = {
+      callerIdName: a.accountName.toUpperCase(),
+      callerIdVisible: true,
+      ...body,
+      id: `bl_${state.businessLines.length + 1}`,
+      name: body.name,
+      accountId: a.id,
+      partitionId: a.partitionId,
+    };
+    state.businessLines.push(created);
+    state.lineCallHandling[created.id] = {
+      activeCallHandling: "RING_LINE",
+      callWaitingEnabled: true,
+      busyFailoverAction: { "@type": "VoicemailRingFailoverAction" },
+      unregisteredFailoverAction: { "@type": "VoicemailRingFailoverAction" },
+      ringTimeoutConfiguration: { "@type": "LimitedRingTimeoutConfiguration", timeoutSeconds: 20, noAnswerAction: { "@type": "VoicemailRingFailoverAction" } },
+    };
+    state.lineRegistrations[created.id] = { registered: false, lockedOut: false };
+    res.json(created);
+  });
+  app.get(`${B}/:businessLineId`, (req, res) => {
+    const l = businessLine(req, res);
+    if (l) res.json(l);
+  });
+  app.get(`${B}/:businessLineId/views/expanded`, (req, res) => {
+    const l = businessLine(req, res);
+    if (l) res.json(expandLine(l));
+  });
+  app.get(`${B}/:businessLineId/registration`, (req, res) => {
+    const l = businessLine(req, res);
+    if (l) res.json(state.lineRegistrations[l.id] ?? { registered: false, lockedOut: false });
+  });
+  app.get(`${B}/:businessLineId/call-handling`, (req, res) => {
+    const l = businessLine(req, res);
+    if (l) res.json(state.lineCallHandling[l.id]);
+  });
+  app.put(`${B}/:businessLineId/call-handling`, (req, res) => {
+    const l = businessLine(req, res);
+    if (!l) return;
+    const body = req.body as BusinessLineCallHandling;
+    if (!body.activeCallHandling || !body.busyFailoverAction || !body.unregisteredFailoverAction || !body.ringTimeoutConfiguration) {
+      fail(res, 400, "activeCallHandling, busyFailoverAction, unregisteredFailoverAction and ringTimeoutConfiguration are required");
+      return;
+    }
+    if (body.activeCallHandling === "FORWARD" && !body.forwardToPhoneNumber) {
+      fail(res, 400, "forwardToPhoneNumber is required when activeCallHandling is FORWARD");
+      return;
+    }
+    state.lineCallHandling[l.id] = body;
+    res.json(body);
+  });
+  app.get(`${B}/:businessLineId/port-assignment`, (req, res) => {
+    const l = businessLine(req, res);
+    if (!l) return;
+    const p = state.linePorts[l.id];
+    if (!p) {
+      fail(res, 404, `Business line ${l.id} has no port assignment`);
+      return;
+    }
+    res.json(p);
+  });
+  const savePort = (create: boolean) => (req: Request, res: Response) => {
+    const l = businessLine(req, res);
+    if (!l) return;
+    const body = req.body as BusinessLinePortAssignment;
+    if (!body.deviceTypeId) {
+      fail(res, 400, "deviceTypeId is required");
+      return;
+    }
+    if (create && state.linePorts[l.id]) {
+      fail(res, 400, `Business line ${l.id} already has a port assignment; use PUT`);
+      return;
+    }
+    if (!create && !state.linePorts[l.id]) {
+      fail(res, 404, `Business line ${l.id} has no port assignment; use POST`);
+      return;
+    }
+    const clash = Object.entries(state.linePorts).find(
+      ([id, p]) => id !== l.id && body.macAddress && p.macAddress === body.macAddress && p.portNumber === body.portNumber,
+    );
+    if (clash) {
+      fail(res, 400, `Port ${body.portNumber} on MAC ${body.macAddress} is already used by business line ${clash[0]}`);
+      return;
+    }
+    state.linePorts[l.id] = { ...body, businessLineId: l.id };
+    res.json(state.linePorts[l.id]);
+  };
+  app.post(`${B}/:businessLineId/port-assignment`, savePort(true));
+  app.put(`${B}/:businessLineId/port-assignment`, savePort(false));
+
+  // ---- Hunt groups -----------------------------------------------------------
+
+  const H = "/v2/partition/:partitionId/account/:accountId/business-line-hunt-group";
+  const huntGroup = (req: Request, res: Response) => {
+    const a = account(req, res);
+    if (!a) return undefined;
+    const g = state.huntGroups.find((x) => x.accountId === a.id && x.id === req.params.huntGroupId);
+    if (!g) fail(res, 404, `Hunt group ${req.params.huntGroupId} not found`);
+    return g;
+  };
+  const validateHunting = (a: Account, g: HuntGroup, res: Response): boolean => {
+    const c = g.huntingConfiguration;
+    if (!c || !c["@type"]) {
+      fail(res, 400, "huntingConfiguration.@type is required");
+      return false;
+    }
+    const ids = c["@type"] === "SimultaneousHuntingConfiguration" ? c.members : c.members.map((m) => m.businessLineId);
+    if (!ids?.length) {
+      fail(res, 400, "huntingConfiguration.members must have at least one member");
+      return false;
+    }
+    const missing = ids.find((id) => !state.businessLines.some((l) => l.accountId === a.id && l.id === id));
+    if (missing) {
+      fail(res, 400, `Business line ${missing} is not on this account`);
+      return false;
+    }
+    return true;
+  };
+  app.get(H, (req, res) => {
+    const a = account(req, res);
+    if (a) res.json(state.huntGroups.filter((g) => g.accountId === a.id));
+  });
+  app.post(H, (req, res) => {
+    const a = account(req, res);
+    if (!a) return;
+    const body = req.body as HuntGroup;
+    if (!body.name) {
+      fail(res, 400, "name is required");
+      return;
+    }
+    if (!validateHunting(a, body, res)) return;
+    const created: HuntGroup = { ...body, id: `hg_${state.huntGroups.length + 1}`, accountId: a.id, partitionId: a.partitionId };
+    state.huntGroups.push(created);
+    state.huntGroupFailover[created.id] = {
+      BUSY: { "@type": "BusyFailoverAction", failoverReason: "BUSY" },
+      NO_ANSWER: { "@type": "BusyFailoverAction", failoverReason: "NO_ANSWER" },
+      UNREGISTERED: { "@type": "BusyFailoverAction", failoverReason: "UNREGISTERED" },
+    };
+    res.json(created);
+  });
+  app.get(`${H}/:huntGroupId`, (req, res) => {
+    const g = huntGroup(req, res);
+    if (g) res.json(g);
+  });
+  app.put(`${H}/:huntGroupId`, (req, res) => {
+    const g = huntGroup(req, res);
+    if (!g) return;
+    const a = state.accounts.find((x) => x.id === g.accountId)!;
+    const body = req.body as HuntGroup;
+    if (!validateHunting(a, body, res)) return;
+    Object.assign(g, { name: body.name ?? g.name, huntingConfiguration: body.huntingConfiguration });
+    res.json(g);
+  });
+  app.get(`${H}/:huntGroupId/failover-action/:reason`, (req, res) => {
+    const g = huntGroup(req, res);
+    if (!g) return;
+    const action = state.huntGroupFailover[g.id]?.[req.params.reason as HuntGroupFailoverReason];
+    if (!action) {
+      fail(res, 404, `No failover action for ${req.params.reason}`);
+      return;
+    }
+    res.json(action);
+  });
+  app.put(`${H}/:huntGroupId/failover-action/:reason`, (req, res) => {
+    const g = huntGroup(req, res);
+    if (!g) return;
+    const body = req.body as HuntGroupFailoverAction;
+    if (!body["@type"] || body.failoverReason !== req.params.reason) {
+      fail(res, 400, "@type and a matching failoverReason are required");
+      return;
+    }
+    if (body["@type"] === "VoicemailFailoverAction" && !body.voicemailBoxId) {
+      fail(res, 400, "voicemailBoxId is required");
+      return;
+    }
+    state.huntGroupFailover[g.id] = { ...state.huntGroupFailover[g.id], [body.failoverReason]: body };
+    res.json(body);
+  });
+
+  // ---- SIP trunks ------------------------------------------------------------
+
+  const S = "/v2/partition/:partitionId/account/:accountId/siptrunk_2";
+  const stripPassword = ({ sipPassword: _pw, ...t }: SipTrunk) => t;
+  const sipTrunk = (req: Request, res: Response) => {
+    const a = account(req, res);
+    if (!a) return undefined;
+    const t = state.sipTrunks.find((x) => x.accountId === a.id && x.id === req.params.sipTrunkId);
+    if (!t) fail(res, 404, `SIP trunk ${req.params.sipTrunkId} not found`);
+    return t;
+  };
+  app.get(S, (req, res) => {
+    const a = account(req, res);
+    if (a) res.json(state.sipTrunks.filter((t) => t.accountId === a.id).map(stripPassword));
+  });
+  app.post(S, (req, res) => {
+    const a = account(req, res);
+    if (!a) return;
+    const body = req.body as Partial<SipTrunk>;
+    if (!body.trunkName || !body.sipUsername || !body.sipPassword || !body.concurrentCalls) {
+      fail(res, 400, "trunkName, sipUsername, sipPassword and concurrentCalls are required");
+      return;
+    }
+    if (state.sipTrunks.some((t) => t.sipUsername === body.sipUsername)) {
+      fail(res, 400, `SIP username ${body.sipUsername} is already in use`);
+      return;
+    }
+    if (state.sipTrunks.some((t) => t.accountId === a.id && t.trunkName === body.trunkName)) {
+      fail(res, 400, `Trunk name ${body.trunkName} already exists on this account`);
+      return;
+    }
+    for (const tn of [body.primaryTn, body.callbackNumber]) {
+      if (tn && !state.numbers.some((n) => n.accountId === a.id && n.phoneNumber === tn)) {
+        fail(res, 400, `Telephone number ${tn} is not on this account`);
+        return;
+      }
+    }
+    const created: SipTrunk = {
+      localServicesEnabled: false,
+      ipBasedAuthEnabled: false,
+      lockedOut: false,
+      telephoneNumbers: [],
+      callingPlans: [{ referenceId: "", referenceType: "SIP_TRUNK", callingPlanProductId: "cpp_unlimited", planMinutes: 20000, secondsRemaining: 1200000 }],
+      ...body,
+      id: `trk_${state.sipTrunks.length + 1}`,
+      trunkName: body.trunkName,
+      accountId: a.id,
+      partitionId: a.partitionId,
+      sipProxyServer: "sip.alianza.example",
+      provisioningStatus: "PROVISIONED",
+    };
+    created.callingPlans![0].referenceId = created.id;
+    state.sipTrunks.push(created);
+    state.sipTrunkRegistrations[created.id] = false;
+    state.sipTrunkForward[created.id] = { sipTrunkId: created.id, forwardOnFailure: [], forwardOnCapacityExceeded: [] };
+    res.json(created);
+  });
+  app.get(`${S}/:sipTrunkId`, (req, res) => {
+    const t = sipTrunk(req, res);
+    if (t) res.json(stripPassword(t));
+  });
+  app.get(`${S}/:sipTrunkId/registrationstatus`, (req, res) => {
+    const t = sipTrunk(req, res);
+    if (t) res.json({ registered: state.sipTrunkRegistrations[t.id] ?? false, lockedOut: t.lockedOut ?? false });
+  });
+  app.get(`${S}/:sipTrunkId/forward`, (req, res) => {
+    const t = sipTrunk(req, res);
+    if (t) res.json(state.sipTrunkForward[t.id] ?? { sipTrunkId: t.id });
   });
 
   // ---- Address ---------------------------------------------------------------

@@ -4,6 +4,14 @@
  */
 import type {
   Account,
+  BusinessLine,
+  BusinessLineCallHandling,
+  BusinessLinePortAssignment,
+  HuntGroup,
+  HuntGroupFailoverAction,
+  HuntGroupFailoverReason,
+  SipTrunk,
+  SipTrunkForwardRules,
   AccountHistoryRecord,
   CallDetailRecord,
   Device,
@@ -32,6 +40,15 @@ export interface FakeState {
   voicemail: Record<string, VoicemailMessage[]>;
   orders: ServiceActivationEvent[];
   reservations: Record<string, string>;
+  businessLines: BusinessLine[];
+  lineCallHandling: Record<string, BusinessLineCallHandling>;
+  linePorts: Record<string, BusinessLinePortAssignment>;
+  lineRegistrations: Record<string, { registered: boolean; lockedOut: boolean }>;
+  huntGroups: HuntGroup[];
+  huntGroupFailover: Record<string, Partial<Record<HuntGroupFailoverReason, HuntGroupFailoverAction>>>;
+  sipTrunks: SipTrunk[];
+  sipTrunkRegistrations: Record<string, boolean>;
+  sipTrunkForward: Record<string, SipTrunkForwardRules>;
 }
 
 const csrJane = {
@@ -109,6 +126,22 @@ export function seed(): FakeState {
         billingCycleDay: 15,
         regulatoryType: "RESIDENTIAL",
         endUserCount: 1,
+        callingPlans: [],
+      },
+      {
+        id: "acc_3",
+        partitionId: FAKE_PARTITION_ID,
+        accountNumber: "LINES-3003",
+        accountName: "Lindon Bakery",
+        status: "ACTIVE",
+        accountType: "ADVANCED",
+        platformType: "CPE2",
+        timeZone: "US/Mountain",
+        extensionLength: 4,
+        dialingBehaviorType: "OPEN_DIAL_PLAN_TEN_DIGIT",
+        billingCycleDay: 1,
+        regulatoryType: "COMMERCIAL",
+        endUserCount: 0,
         callingPlans: [],
       },
     ],
@@ -245,6 +278,32 @@ export function seed(): FakeState {
         },
         directoryListing: { listed: true, type: "LIST_PUBLISH" },
       },
+      {
+        id: "18015553001",
+        phoneNumber: "18015553001",
+        partitionId: FAKE_PARTITION_ID,
+        accountId: "acc_3",
+        referenceType: "BUSINESS_LINE_HUNT_GROUP",
+        referenceId: "hg_1",
+        functionType: "ELS",
+        operationalStatus: "ACTIVE",
+        carrierStatus: "ACTIVE",
+        customerServiceRecord: { businessName: "Lindon Bakery", streetNumber: "10", streetName: "Center", streetSuffix: "St", city: "Lindon", state: "UT", country: "USA", postalCode: "84042", customerType: "BUSINESS", customerName: "LINDON BAKERY" },
+        directoryListing: { listed: false, type: "NOT_LIST_NOT_PUBLISH" },
+      },
+      {
+        id: "18015553002",
+        phoneNumber: "18015553002",
+        partitionId: FAKE_PARTITION_ID,
+        accountId: "acc_3",
+        referenceType: "SIP_TRUNK",
+        referenceId: "trk_1",
+        functionType: "ELS",
+        operationalStatus: "ACTIVE",
+        carrierStatus: "ACTIVE",
+        customerServiceRecord: { businessName: "Lindon Bakery", streetNumber: "10", streetName: "Center", streetSuffix: "St", city: "Lindon", state: "UT", country: "USA", postalCode: "84042", customerType: "BUSINESS", customerName: "LINDON BAKERY" },
+        directoryListing: { listed: false, type: "NOT_LIST_NOT_PUBLISH" },
+      },
     ],
     inventory: [
       { id: "18015550100", phoneNumber: "18015550100", partitionId: FAKE_PARTITION_ID, rateCenter: "LINDON", state: "UT", country: "USA", prefix: "1801555", carrierId: "car_1", functionType: "ELS", isInInventory: true, distance: 1.2, matchesZip: true, byotn: false },
@@ -291,5 +350,78 @@ export function seed(): FakeState {
       { id: "sae_3", partitionId: FAKE_PARTITION_ID, accountId: "acc_2", serviceType: "PORT_REQUEST", referenceType: "PORT", referenceId: "port_78", activationStatusType: "REJECTED", createdDate: "2026-09-01T09:00:00Z", lastUpdatedDate: "2026-09-03T09:00:00Z", mainTelephoneNumber: "12135552003", subTelephoneNumbers: ["12135552003"], firstName: "Bob", lastName: "Jones", losingCarrier: "Verizon", inboundCarrierType: "BANDWIDTH", logs: [{ status: "PENDING", actionDate: "2026-09-01T09:00:00Z", code: "Port", message: "Start Port" }, { status: "REJECTED", actionDate: "2026-09-03T09:00:00Z", code: "REJECT", message: "Address mismatch: losing carrier has 100 Main St Apt 2" }] },
     ],
     reservations: {},
+    businessLines: [
+      { id: "bl_1", name: "Counter", accountId: "acc_3", partitionId: FAKE_PARTITION_ID, callerIdPhoneNumber: "18015553001", callerIdName: "LINDON BAKERY", callerIdVisible: true, emergencyCallbackPhoneNumber: "18015553001" },
+      { id: "bl_2", name: "Kitchen", accountId: "acc_3", partitionId: FAKE_PARTITION_ID, callerIdPhoneNumber: "18015553001", callerIdName: "LINDON BAKERY", callerIdVisible: true, emergencyCallbackPhoneNumber: "18015553001" },
+    ],
+    lineCallHandling: {
+      bl_1: {
+        activeCallHandling: "RING_LINE",
+        callWaitingEnabled: true,
+        busyFailoverAction: { "@type": "VoicemailRingFailoverAction" },
+        unregisteredFailoverAction: { "@type": "ForwardRingFailoverAction", forwardToPhoneNumber: "18015559999" },
+        ringTimeoutConfiguration: { "@type": "LimitedRingTimeoutConfiguration", timeoutSeconds: 25, noAnswerAction: { "@type": "VoicemailRingFailoverAction" } },
+        voicemailBoxId: "blvm_1",
+      },
+      bl_2: {
+        activeCallHandling: "FORWARD",
+        forwardToPhoneNumber: "18015558888",
+        callWaitingEnabled: false,
+        busyFailoverAction: { "@type": "BusyRingFailoverAction" },
+        unregisteredFailoverAction: { "@type": "BusyRingFailoverAction" },
+        ringTimeoutConfiguration: { "@type": "UnlimitedRingTimeoutConfiguration" },
+      },
+    },
+    linePorts: {
+      bl_1: { businessLineId: "bl_1", deviceTypeId: "SPA122", macAddress: "c4e90a778899", portNumber: 1, faxEnabled: false },
+    },
+    lineRegistrations: { bl_1: { registered: true, lockedOut: false }, bl_2: { registered: false, lockedOut: false } },
+    huntGroups: [
+      {
+        id: "hg_1",
+        name: "Bakery ring group",
+        accountId: "acc_3",
+        partitionId: FAKE_PARTITION_ID,
+        huntingConfiguration: { "@type": "SimultaneousHuntingConfiguration", ringTimeoutSeconds: 30, members: ["bl_1", "bl_2"] },
+      },
+    ],
+    huntGroupFailover: {
+      hg_1: {
+        BUSY: { "@type": "BusyFailoverAction", failoverReason: "BUSY" },
+        NO_ANSWER: { "@type": "VoicemailFailoverAction", failoverReason: "NO_ANSWER", voicemailBoxId: "blvm_1" },
+        UNREGISTERED: { "@type": "ForwardFailoverAction", failoverReason: "UNREGISTERED", forwardToPhoneNumber: "18015559999" },
+      },
+    },
+    sipTrunks: [
+      {
+        id: "trk_1",
+        accountId: "acc_3",
+        partitionId: FAKE_PARTITION_ID,
+        trunkName: "Bakery PBX",
+        sipUsername: "lindon-bakery-pbx",
+        sipPassword: "s3cret-never-shown",
+        concurrentCalls: 10,
+        maxBurstCalls: 12,
+        primaryTn: "18015553002",
+        callbackNumber: "18015553002",
+        telephoneNumbers: ["18015553002"],
+        sipProxyServer: "sip.alianza.example",
+        lockedOut: false,
+        localServicesEnabled: true,
+        extensionPatterns: ["21XX"],
+        provisioningStatus: "PROVISIONED",
+        ipBasedAuthEnabled: false,
+        callingPlans: [{ referenceId: "trk_1", referenceType: "SIP_TRUNK", callingPlanProductId: "cpp_unlimited", planMinutes: 20000, secondsRemaining: 600000 }],
+      },
+    ],
+    sipTrunkRegistrations: { trk_1: true },
+    sipTrunkForward: {
+      trk_1: {
+        sipTrunkId: "trk_1",
+        forwardAlways: { referenceType: "TELEPHONE", referenceId: "18015559999", enabled: false },
+        forwardOnFailure: [{ referenceType: "TELEPHONE", referenceId: "18015557777" }],
+        forwardOnCapacityExceeded: [{ referenceType: "BUSY" }],
+      },
+    },
   };
 }
