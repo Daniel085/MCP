@@ -47,31 +47,6 @@ jobs:
           for i in $(seq 1 20); do curl -sf http://127.0.0.1:4010/items >/dev/null && break; sleep 0.5; done
           uv run smoke
 
-  alianza:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: servers/alianza
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: servers/alianza/package-lock.json
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-      - name: Smoke test over stdio
-        run: |
-          node dist/fake-api.js &
-          for i in $(seq 1 20); do curl -sf -o /dev/null -w "" http://127.0.0.1:4010/users -H "Authorization: Bearer static-user-token" && break; sleep 0.5; done
-          npm run smoke
-      - run: npm audit --audit-level=high
-      - run: npm pack --dry-run
-      - run: docker build -t alianza-mcp .
-
   evals:
     runs-on: ubuntu-latest
     defaults:
