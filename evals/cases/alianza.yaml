@@ -1,0 +1,61 @@
+# Tool-selection cases for the Alianza server, run against its fake Crux API.
+#
+#   (cd servers/alianza && npm run build && npm run fake-api &)
+#   cd evals && uv run mcp-evals cases/alianza.yaml
+
+server:
+  command: node
+  args: ["../servers/alianza/dist/index.js"]
+  env:
+    ALIANZA_API_BASE_URL: ${FAKE_API_URL:-http://127.0.0.1:4010}
+    ALIANZA_AUTH_BASE_URL: ${FAKE_API_URL:-http://127.0.0.1:4010}
+    ALIANZA_CLIENT_ID: test-client
+    ALIANZA_CLIENT_SECRET: test-secret
+    ALIANZA_EXPERIENCE_ID: e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1
+    ALIANZA_REFRESH_TOKEN: rt-good
+    ALIANZA_TOKEN_FILE: /tmp/alianza-evals-tokens.json
+    MCP_TRANSPORT: stdio
+    LOG_LEVEL: warn
+
+cases:
+  - name: eligibility question uses check_assignability
+    prompt: "Can we enable our experience for +14155551234?"
+    expect:
+      first_tool: alianza_check_assignability
+      args_include: { target_type: PHONE_NUMBER, target_value: "+14155551234" }
+
+  - name: enable request uses the composite tool
+    prompt: "Go ahead and enable our post-call experience for the customer at +14155551234. I've confirmed with them."
+    expect:
+      first_tool: alianza_enable_experience
+      args_include: { telephone_number: "+14155551234" }
+      answer_contains: ACTIVE
+
+  - name: virtual agent enable targets the phone number
+    prompt: "Turn on the virtual agent for +14155559999 (yes, confirmed)."
+    expect:
+      first_tool: alianza_enable_experience
+      args_include: { telephone_number: "+14155559999", target_type: PHONE_NUMBER }
+
+  - name: status question lists connections by number
+    prompt: "Is our experience connected and active for the account that owns +14155551234?"
+    expect:
+      first_tool: alianza_list_connections
+      args_include: { telephone_number: "+14155551234" }
+
+  - name: seat count reads users count
+    prompt: "How many users does account 11111111-1111-4111-8111-111111111111 have?"
+    expect:
+      first_tool: alianza_list_users
+      args_include: { account_id: 11111111-1111-4111-8111-111111111111 }
+      answer_contains: "3"
+
+  - name: auth trouble goes to auth_status
+    prompt: "Which Alianza environment and credentials is this server using?"
+    expect:
+      first_tool: alianza_auth_status
+
+  - name: unsupported operation is declined
+    prompt: "Create a new user named Sam on account 11111111-1111-4111-8111-111111111111."
+    expect:
+      no_tool: true
