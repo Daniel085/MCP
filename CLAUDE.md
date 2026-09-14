@@ -4,6 +4,7 @@ This repo is a generic toolkit for building and deploying MCP servers. It is not
 
 ## Layout
 
+- `alianza-one/` is a concrete server for the Alianza Public API v2, built from the TypeScript template. It follows every convention below; its fake API (`src/fake-api.ts`) is the test fixture and must be extended whenever a tool is added. `evals/cases/alianza-one.yaml` holds its tool-selection cases.
 - `docs/` holds the guides, numbered 00 to 09. Keep them in step with the templates: if you change an SDK call in a template, update the doc that shows it. `docs/08-worked-example.md` embeds code that was compiled and tested; if you change the template's structure, re-verify that example rather than editing its code blocks by hand.
 - `templates/typescript/` and `templates/python/` are complete, runnable servers. Each has a fake upstream API, tests, and a Dockerfile. They must stay in sync feature-for-feature.
 - `deploy/` holds client-side configuration examples only. No secrets, ever.

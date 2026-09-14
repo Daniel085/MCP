@@ -19,6 +19,18 @@
         "API_KEY": "${API_KEY}"
       }
     },
+    "alianza-one": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${CLAUDE_PROJECT_DIR:-.}/alianza-one/dist/index.js"],
+      "env": {
+        "ALIANZA_BASE_URL": "${ALIANZA_BASE_URL:-https://api.b2.alianza.com}",
+        "ALIANZA_USERNAME": "${ALIANZA_USERNAME}",
+        "ALIANZA_PASSWORD": "${ALIANZA_PASSWORD}",
+        "ALIANZA_PARTITION_ID": "${ALIANZA_PARTITION_ID:-}",
+        "LOG_LEVEL": "info"
+      }
+    },
     "items-remote": {
       "type": "http",
       "url": "${MCP_SERVER_URL:-https://mcp.example.com/mcp}",

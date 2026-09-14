@@ -8,6 +8,15 @@
         "API_KEY": "replace-me-or-use-a-keychain-wrapper"
       }
     },
+    "alianza-one": {
+      "command": "node",
+      "args": ["/abs/path/to/alianza-one/dist/index.js"],
+      "env": {
+        "ALIANZA_BASE_URL": "https://api.b2.alianza.com",
+        "ALIANZA_USERNAME": "api-user@example.com",
+        "ALIANZA_PASSWORD": "replace-me-or-use-a-keychain-wrapper"
+      }
+    },
     "items-python": {
       "command": "uv",
       "args": ["--directory", "/abs/path/to/templates/python", "run", "mcp-server"],

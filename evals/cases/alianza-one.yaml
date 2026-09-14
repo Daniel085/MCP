@@ -1,0 +1,92 @@
+# Tool-selection cases for the Alianza One server.
+#
+# Run from the repo root, after building the server and starting its fake API:
+#
+#   (cd alianza-one && npm run build && npm run fake-api &)
+#   cd evals && uv run mcp-evals cases/alianza-one.yaml
+
+server:
+  command: node
+  args: ["../alianza-one/dist/index.js"]
+  env:
+    ALIANZA_BASE_URL: ${ALIANZA_BASE_URL:-http://127.0.0.1:4010}
+    ALIANZA_USERNAME: ${ALIANZA_USERNAME:-api@example.com}
+    ALIANZA_PASSWORD: ${ALIANZA_PASSWORD:-correct-horse}
+    MCP_TRANSPORT: stdio
+    LOG_LEVEL: warn
+
+cases:
+  - name: customer name goes to account search
+    prompt: "Do we have a customer called Acme Dental?"
+    expect:
+      first_tool: alianza_search_accounts
+      args_include: { query: acme }
+      answer_contains: ACME-1001
+
+  - name: account number goes straight to get_account with lookupBy
+    prompt: "Pull up account HOME-2002."
+    expect:
+      first_tool: alianza_get_account
+      args_include: { id: HOME-2002, lookupBy: AccountNumber }
+      answer_contains: Bob Jones
+
+  - name: whose number is this uses get_phone_number
+    prompt: "Whose number is 801-555-1002 and is its port finished?"
+    expect:
+      first_tool: alianza_get_phone_number
+      answer_contains: PORT_PENDING
+
+  - name: port status uses number orders
+    prompt: "What is the FOC date on the port for 18015551002?"
+    expect:
+      tools: [alianza_search_number_orders]
+      answer_contains: 2026-09-20
+
+  - name: phone not working checks registration
+    prompt: "A user on account acc_1 says their desk phone is dead. Which of their phones are not registered?"
+    expect:
+      first_tool: alianza_list_devices
+      args_include: { accountId: acc_1, includeRegistration: true }
+      answer_contains: Office 2
+
+  - name: missed calls use call records with filters
+    prompt: "List the missed calls on account acc_1 between 2026-09-10 and 2026-09-11."
+    expect:
+      first_tool: alianza_search_call_records
+      args_include: { accountId: acc_1, startDate: "2026-09-10", endDate: "2026-09-11", result: MISSED }
+      answer_contains: "12125550123"
+
+  - name: unread voicemail resolves the user first
+    prompt: "Does Jane Doe on account acc_1 have any unread voicemails?"
+    expect:
+      first_tool: alianza_list_users
+      answer_contains: Dr. Lee
+
+  - name: who changed the status uses account history
+    prompt: "Who suspended account acc_2?"
+    expect:
+      first_tool: alianza_get_account_history
+      args_include: { accountId: acc_2 }
+      answer_contains: billing-bot
+
+  - name: finding a number near an address validates it first
+    prompt: "Find me an available local number for 333 S 520 W, Lindon, UT 84042."
+    expect:
+      first_tool: alianza_validate_address
+      answer_contains: "1801555"
+
+  - name: creation waits for confirmed details and uses create_account
+    prompt: "Create a business account numbered SP-200 named Lindon Bakery in US/Mountain with 4 digit extensions. I have confirmed these details."
+    expect:
+      tools: [alianza_create_account]
+      args_include: { accountNumber: SP-200, accountType: ADVANCED, timeZone: US/Mountain, extensionLength: 4 }
+
+  - name: deletion is not offered
+    prompt: "Delete account acc_2."
+    expect:
+      no_tool: true
+
+  - name: porting is not offered
+    prompt: "Port 12125550123 from Verizon onto account acc_1."
+    expect:
+      no_tool: true

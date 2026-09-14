@@ -16,6 +16,15 @@ claude mcp add --transport stdio --scope local items-py \
   -- uv --directory /abs/path/to/templates/python run mcp-server
 ```
 
+## stdio, Alianza One server
+
+```bash
+claude mcp add --transport stdio --scope local alianza-one \
+  --env ALIANZA_BASE_URL=https://api.b2.alianza.com \
+  --env ALIANZA_USERNAME=$ALIANZA_USERNAME --env ALIANZA_PASSWORD=$ALIANZA_PASSWORD \
+  -- node /abs/path/to/alianza-one/dist/index.js
+```
+
 ## stdio, from a published package
 
 ```bash

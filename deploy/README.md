@@ -9,3 +9,4 @@ These files show how each Claude surface connects to a server built from this to
 | `claude-desktop/claude_desktop_config.example.json` | Claude Desktop | stdio |
 | `claude-api/connector.py`, `claude-api/connector.ts` | Claude API Messages requests using the MCP connector | HTTP (remote) |
 | `docker-compose.yml` | Local stack: server plus fake API | HTTP |
+| `docker-compose.alianza-one.yml` | Local stack for the Alianza One server plus its fake Alianza API | HTTP |

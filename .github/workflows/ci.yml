@@ -28,6 +28,29 @@ jobs:
           npm run smoke
       - run: npm audit --audit-level=high
 
+  alianza-one:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: alianza-one
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: alianza-one/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Smoke test over stdio
+        run: |
+          npm run fake-api &
+          for i in $(seq 1 20); do curl -s -o /dev/null http://127.0.0.1:4010/v2/partition/prt_1 && break; sleep 0.5; done
+          npm run smoke
+      - run: npm audit --audit-level=high
+
   python:
     runs-on: ubuntu-latest
     defaults:
@@ -65,7 +88,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        template: [typescript, python]
+        include:
+          - name: typescript
+            context: templates/typescript
+          - name: python
+            context: templates/python
+          - name: alianza-one
+            context: alianza-one
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t mcp-${{ matrix.template }} templates/${{ matrix.template }}
+      - run: docker build -t mcp-${{ matrix.name }} ${{ matrix.context }}
