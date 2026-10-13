@@ -1,9 +1,12 @@
 /**
- * Streamable HTTP transport, stateless mode.
+ * Streamable HTTP transport, stateless mode with JSON responses.
  *
  * Every POST /mcp builds a fresh server and transport, handles the request,
  * and tears both down when the response closes. Nothing is kept between
  * requests, so any number of replicas can sit behind a load balancer.
+ * Responses are plain JSON (`enableJsonResponse`), not Server-Sent Events:
+ * simpler to proxy, cache, and debug, and sufficient for request/response
+ * tools. Switch it off only if a tool needs to stream progress notifications.
  *
  * Stateful variant (needed for server-initiated notifications): create the
  * transport with `sessionIdGenerator: () => randomUUID()`, keep a
@@ -54,7 +57,7 @@ export function createHttpApp(config: Config, api: ApiClient): Express {
 
   app.post(config.httpPath, async (req, res) => {
     const server = createServer(api);
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on("close", () => {
       void transport.close();
       void server.close();

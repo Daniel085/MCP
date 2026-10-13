@@ -40,12 +40,12 @@ A tool call result carries `content` (text, images, or embedded resources), opti
 | Transport | When | How the host launches it |
 | --- | --- | --- |
 | stdio | Local use. The host spawns your process and talks over stdin/stdout. | `command` + `args` in the host's config. |
-| Streamable HTTP | Remote or shared servers. A single `/mcp` endpoint that accepts POST and optionally streams responses with Server-Sent Events. | A URL in the host's config. |
+| Streamable HTTP | Remote or shared servers. A single `/mcp` endpoint that accepts POST. Responses are plain JSON by default in the templates; the protocol also allows streaming them as Server-Sent Events when a tool needs to push progress. | A URL in the host's config. |
 | HTTP+SSE (legacy) | Older clients only. Deprecated. | Do not build new servers on it. |
 
 One hard rule for stdio: nothing may write to stdout except the transport. A stray `console.log` or `print()` corrupts the stream. Log to stderr.
 
-Streamable HTTP servers can be stateless (every request builds a fresh server, easy to scale behind a load balancer) or stateful (a session ID header ties requests together, needed for server-initiated notifications). The templates default to stateless.
+Streamable HTTP servers can be stateless (every request builds a fresh server, easy to scale behind a load balancer) or stateful (a session ID header ties requests together, needed for server-initiated notifications). Independently, each response can be a single JSON body or a Server-Sent Events stream. The templates default to stateless with JSON responses: the simplest shape to scale, proxy, and debug, and all an API wrapper needs. Turn on streaming only for tools that must report progress mid-call.
 
 ## Lifecycle
 

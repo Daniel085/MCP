@@ -68,11 +68,15 @@ Map upstream failures to messages the model can act on. Return them as tool resu
 
 | Upstream | Tool result text |
 | --- | --- |
-| 401 / 403 | `Authentication failed. Check the API credentials configured for this server.` |
-| 404 | `No customer found with id cus_123.` |
+| 401 | `Authentication failed. Check the API credentials configured for this server.` |
+| 403 | `The API refused this operation for the configured credentials; they may lack permission for it.` |
+| 404 | `No customer found with id cus_123. Use search_customers to find the right id.` |
+| 409 | `Conflict: <API message>. Fetch the current state before retrying.` |
 | 422 / 400 | `Invalid request: <validation message from the API>.` |
 | 429 | `Rate limited by the API. Retry after 30 seconds.` |
 | 5xx / network | `The upstream API is unavailable (HTTP 503). Try again shortly.` |
+
+Every failure message should name a next step the model can take: the tool to call to find a valid id, the state to fetch before retrying, the credential to fix. "Not found" alone leaves the model guessing.
 
 Never leak secrets, stack traces, or full request URLs with tokens in query strings.
 

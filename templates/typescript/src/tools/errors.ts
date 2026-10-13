@@ -12,10 +12,13 @@ export function apiErrorToText(err: ApiError): string {
     case 0:
       return `The upstream API could not be reached (${err.message}). Try again shortly.`;
     case 401:
-    case 403:
       return "Authentication with the upstream API failed. Check the API credentials configured for this server.";
+    case 403:
+      return `The upstream API refused this operation for the configured credentials: ${err.message}. The credential may lack permission for it.`;
     case 404:
-      return `Not found: ${err.message}`;
+      return `Not found: ${err.message}. Check the id, or use list_items to find the right one.`;
+    case 409:
+      return `Conflict: ${err.message}. Fetch the current state before retrying.`;
     case 400:
     case 422:
       return `The API rejected the request: ${err.message}`;

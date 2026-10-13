@@ -20,10 +20,17 @@ def api_error_to_text(err: ApiError) -> str:
     """Convert an upstream failure into text the model can act on."""
     if err.status == 0:
         return f"The upstream API could not be reached ({err.message}). Try again shortly."
-    if err.status in (401, 403):
+    if err.status == 401:
         return "Authentication with the upstream API failed. Check the API credentials configured for this server."
+    if err.status == 403:
+        return (
+            f"The upstream API refused this operation for the configured credentials: {err.message}. "
+            "The credential may lack permission for it."
+        )
     if err.status == 404:
-        return f"Not found: {err.message}"
+        return f"Not found: {err.message}. Check the id, or use list_items to find the right one."
+    if err.status == 409:
+        return f"Conflict: {err.message}. Fetch the current state before retrying."
     if err.status in (400, 422):
         return f"The API rejected the request: {err.message}"
     if err.status == 429:
