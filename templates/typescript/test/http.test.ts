@@ -50,6 +50,18 @@ describe("streamable http transport", () => {
     expect(res.status).toBe(401);
   });
 
+  it("answers with plain JSON, not an event stream", async () => {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "0" } } }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/^application\/json/);
+    const body = (await res.json()) as { result?: { serverInfo?: { name: string } } };
+    expect(body.result?.serverInfo?.name).toBeTruthy();
+  });
+
   it("completes a full client session with a bearer token", async () => {
     const transport = new StreamableHTTPClientTransport(url, {
       requestInit: { headers: { Authorization: `Bearer ${token}` } },

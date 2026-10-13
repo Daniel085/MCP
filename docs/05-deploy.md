@@ -39,9 +39,9 @@ API_BASE_URL=https://api.example.com API_KEY=... MCP_AUTH_TOKEN=... \
 node dist/index.js
 ```
 
-### Stateless vs stateful
+### Stateless JSON by default
 
-The templates run stateless: a fresh `McpServer` per request, no session header, safe behind any load balancer. Choose stateful only if you need server-initiated notifications (`tools/list_changed`, resource subscriptions) or long-lived per-client state. In stateful mode the SDK issues an `Mcp-Session-Id` header and you must route all of a session's requests to the same instance (sticky sessions or a shared event store). The TypeScript template's `src/http.ts` shows the stateless wiring and comments on the stateful variant.
+The templates run stateless with JSON responses: a fresh `McpServer` per request, no session header, one JSON body per response, safe behind any load balancer or proxy. This is the recommended shape for an API wrapper. Choose stateful only if you need server-initiated notifications (`tools/list_changed`, resource subscriptions) or long-lived per-client state. In stateful mode the SDK issues an `Mcp-Session-Id` header and you must route all of a session's requests to the same instance (sticky sessions or a shared event store). The TypeScript template's `src/http.ts` shows the stateless wiring and comments on the stateful variant.
 
 ### Container
 
@@ -64,7 +64,7 @@ The container exposes `GET /healthz` for liveness probes. It does not require au
 Anything that runs a container and forwards HTTP works. Requirements:
 
 - HTTPS termination (a reverse proxy, a cloud load balancer, or the platform's ingress).
-- Support for streaming responses. Streamable HTTP uses Server-Sent Events for long tool calls; disable proxy response buffering (`proxy_buffering off` in nginx) or set `json_response` mode in the template if your proxy cannot stream.
+- Nothing special for streaming, because the templates answer with plain JSON. If you switch a server to Server-Sent Events responses (for progress notifications during long tool calls), also disable proxy response buffering (`proxy_buffering off` in nginx).
 - Request timeouts long enough for your slowest tool.
 
 Platforms that fit well: Cloud Run, Fly.io, ECS/Fargate, Azure Container Apps, Kubernetes, a plain VM with systemd and Caddy. Serverless functions work only in stateless mode and only if they can stream.

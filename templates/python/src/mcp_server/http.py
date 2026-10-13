@@ -1,4 +1,8 @@
-"""Streamable HTTP transport, stateless mode.
+"""Streamable HTTP transport, stateless mode with JSON responses.
+
+Responses are plain JSON (`json_response=True`), not Server-Sent Events:
+simpler to proxy, cache, and debug, and sufficient for request/response
+tools. Switch it off only if a tool needs to stream progress notifications.
 
 `MCPServer.streamable_http_app()` returns a Starlette app whose lifespan runs
 the SDK's session manager. We wrap it in a small ASGI middleware that enforces
@@ -72,7 +76,7 @@ def create_http_app(config: Config, api: ApiClient) -> ASGIApp:
     app: Any = mcp.streamable_http_app(
         streamable_http_path=config.http_path,
         stateless_http=True,
-        json_response=False,
+        json_response=True,
         transport_security=security,
         host=config.http_host,
     )

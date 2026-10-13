@@ -71,6 +71,28 @@ async def test_rejects_missing_bearer(http_server):
     assert res.status_code == 401
 
 
+async def test_answers_with_plain_json(http_server):
+    init = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "t", "version": "0"},
+        },
+    }
+    async with httpx.AsyncClient() as client:
+        res = await client.post(
+            f"{http_server}/mcp",
+            json=init,
+            headers={"Authorization": f"Bearer {TOKEN}", "Accept": "application/json, text/event-stream"},
+        )
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("application/json")
+    assert res.json()["result"]["serverInfo"]["name"]
+
+
 async def test_full_session_with_bearer(http_server):
     http_client = create_mcp_http_client(headers={"Authorization": f"Bearer {TOKEN}"})
     async with (
