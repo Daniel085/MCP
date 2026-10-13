@@ -108,7 +108,7 @@ describe("connections and assignments", () => {
 
     const none = await t.call("alianza_list_connections", {});
     expect(none.isError).toBe(true);
-    expect(none.text).toContain("account_id or telephone_number");
+    expect(none.text).toContain("account_id, or telephone_number");
   });
 
   it("activates, reports no-op on repeat, and deactivates", async () => {
@@ -130,17 +130,17 @@ describe("connections and assignments", () => {
     expect(got.data?.state).toBe("INACTIVE");
   });
 
-  it("assignment lifecycle: create, list by account and by target, get, 409 on duplicate, delete, 404 after", async () => {
+  it("assignment lifecycle: create, reuse on duplicate, list by account and by target, get, delete, 404 after", async () => {
     await t.call("alianza_create_connection", { telephone_number: "+14155551234" });
     const created = await t.call("alianza_create_assignment", { target_type: "PHONE_NUMBER", target_value: "+14155551234" });
     expect(created.isError).toBe(false);
-    expect(created.data).toMatchObject({ targetType: "PHONE_NUMBER", accountId: ACME_ID, experienceId: EXPERIENCE_ID });
+    expect(created.data).toMatchObject({ targetType: "PHONE_NUMBER", accountId: ACME_ID, experienceId: EXPERIENCE_ID, created: true });
     const id = created.data?.id as string;
 
     const dup = await t.call("alianza_create_assignment", { target_type: "PHONE_NUMBER", target_value: "+14155551234" });
-    expect(dup.isError).toBe(true);
-    expect(dup.text).toMatch(/^Conflict:/);
-    expect(dup.text).toContain("traceId");
+    expect(dup.isError).toBe(false);
+    expect(dup.data).toMatchObject({ id, created: false });
+    expect(dup.text).toContain("already exists");
 
     const byAccount = await t.call("alianza_list_assignments", { account_id: ACME_ID });
     expect(byAccount.data?.entities.map((a: { id: string }) => a.id)).toEqual([id]);
@@ -156,15 +156,31 @@ describe("connections and assignments", () => {
 
     const del = await t.call("alianza_delete_assignment", { assignment_id: id });
     expect(del.isError).toBe(false);
+    expect(del.data).toEqual({ id, deleted: true });
     const gone = await t.call("alianza_get_assignment", { assignment_id: id });
     expect(gone.isError).toBe(true);
     expect(gone.text).toMatch(/not found/i);
+    expect(gone.text).toContain("alianza_list_assignments");
+
+    const again = await t.call("alianza_delete_assignment", { assignment_id: id });
+    expect(again.isError).toBe(true);
+    expect(again.text).toContain("already be deleted");
+  });
+
+  it("409 from a state change names the tool to fetch current state", async () => {
+    const c = await t.call("alianza_create_connection", { telephone_number: "+14155551234", state: "ACTIVE" });
+    // Bypass the no-op detection by calling the API the way a stale client would.
+    await expect(t.ctx.api.updateConnection(c.data?.id, { ...(c.data as never), state: "ACTIVE" })).rejects.toMatchObject({ status: 409 });
+    const missing = await t.call("alianza_get_connection", { connection_id: "00000000-0000-0000-0000-000000000000" });
+    expect(missing.isError).toBe(true);
+    expect(missing.text).toContain("alianza_list_connections");
   });
 
   it("delete connection", async () => {
     const c = await t.call("alianza_create_connection", { telephone_number: "+14155559999" });
     const del = await t.call("alianza_delete_connection", { connection_id: c.data?.id });
     expect(del.isError).toBe(false);
+    expect(del.data).toEqual({ id: c.data?.id, deleted: true });
     const list = await t.call("alianza_list_connections", { account_id: BETA_ID });
     expect(list.data?.entities).toHaveLength(0);
   });
@@ -233,6 +249,12 @@ describe("enable experience (composite)", () => {
     expect(r.data?.assignment).toMatchObject({ targetType: "PHONE_NUMBER", targetValue: "+14155559999", accountId: BETA_ID });
   });
 
+  it("requires target_value for USER targets", async () => {
+    const r = await t.call("alianza_enable_experience", { telephone_number: "+14155551234", target_type: "USER" });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("target_value");
+  });
+
   it("stops before changing anything when the target is not assignable", async () => {
     const r = await t.call("alianza_enable_experience", { telephone_number: "+14155550000" });
     expect(r.isError).toBe(true);
@@ -281,12 +303,27 @@ describe("credentials", () => {
     }
   });
 
-  it("maps a missing scope to actionable text", async () => {
+  it("maps a missing scope to actionable text, including inside the composite", async () => {
     const t = await connectTestClient({ userToken: "none", staticAccessToken: "read-only-token" });
     try {
       const r = await t.call("alianza_list_users", {});
       expect(r.isError).toBe(true);
       expect(r.text).toContain("users:manage");
+      const e = await t.call("alianza_enable_experience", { telephone_number: "+14155551234" });
+      expect(e.isError).toBe(true);
+      expect(e.text).toContain("experience-connections:manage");
+    } finally {
+      await t.close();
+    }
+  });
+
+  it("accepts a non-RFC-4122 shaped id and lets the API decide", async () => {
+    const t = await connectTestClient();
+    try {
+      // Version nibble "c" and variant nibble "0" are not RFC 4122; Zod's uuid() would reject this before the call.
+      const r = await t.call("alianza_get_connection", { connection_id: "01234567-89ab-cdef-0123-456789abcdef" });
+      expect(r.isError).toBe(true);
+      expect(r.text).toMatch(/not found/i);
     } finally {
       await t.close();
     }

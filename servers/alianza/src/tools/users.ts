@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { UnifiedUser } from "../api-client.js";
 import { withErrorHandling } from "./errors.js";
 import type { ToolContext } from "./context.js";
-import { pageShape, pagingHint, userShape, uuid } from "./schemas.js";
+import { cursorInput, EXAMPLE_UUID, idInput, pageShape, pageSizeInput, pagingHint, userShape } from "./schemas.js";
 
 function describeUser(u: UnifiedUser): string {
   const name = [u.firstName, u.lastName].filter(Boolean).join(" ") || "(no name)";
@@ -20,11 +20,11 @@ export function registerUserTools(server: McpServer, ctx: ToolContext): void {
         "which is the number to use for seat counts. The list is eventually consistent (recent changes may lag); use " +
         "alianza_get_user for an exact read. Keep account_id, sort_by, and sort_order fixed while paging with a cursor.",
       inputSchema: {
-        account_id: uuid.optional().describe("Account to list users for. Omit for every account visible to the token."),
-        page_size: z.number().int().min(1).max(200).default(50),
-        cursor: z.string().optional(),
-        sort_by: z.enum(["createdAt", "lastName", "firstName"]).default("createdAt"),
-        sort_order: z.enum(["asc", "desc"]).default("asc"),
+        account_id: idInput("Account").optional().describe(`Account to list users for (UUID), e.g. ${EXAMPLE_UUID}. Omit for every account visible to the token.`),
+        page_size: pageSizeInput(200),
+        cursor: cursorInput,
+        sort_by: z.enum(["createdAt", "lastName", "firstName"]).default("createdAt").describe("Sort field. Default createdAt."),
+        sort_order: z.enum(["asc", "desc"]).default("asc").describe("Sort direction. Default asc."),
       },
       outputSchema: { entities: z.array(z.object(userShape)), count: z.number().int().optional(), ...pageShape },
       annotations: { readOnlyHint: true, openWorldHint: true },
@@ -55,7 +55,7 @@ export function registerUserTools(server: McpServer, ctx: ToolContext): void {
       description:
         "Fetch one user by id. Accepts the unified UUID or a native Alianza One user id. Always current, unlike the list. " +
         "A user the token may not see returns not-found.",
-      inputSchema: { user_id: z.string().min(1).describe("Unified user UUID or native One id.") },
+      inputSchema: { user_id: z.string().min(1).describe(`Unified user id (UUID), e.g. ${EXAMPLE_UUID}, or a native Alianza One user id.`) },
       outputSchema: userShape,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },

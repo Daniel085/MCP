@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { ToolContext } from "./context.js";
+import { withErrorHandling } from "./errors.js";
 
 export function registerAuthTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
@@ -30,7 +31,8 @@ export function registerAuthTools(server: McpServer, ctx: ToolContext): void {
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async () => {
+    async () =>
+      withErrorHandling("alianza_auth_status", async () => {
       const s = ctx.auth.status({ env: ctx.config.env, apiBaseUrl: ctx.config.apiBaseUrl, experienceId: ctx.config.experienceId });
       const userReady = s.userToken.source !== "none";
       const ready = { assignability: s.clientCredentials || userReady, userOperations: userReady };
@@ -45,6 +47,6 @@ export function registerAuthTools(server: McpServer, ctx: ToolContext): void {
         }`,
       ];
       return { content: [{ type: "text", text: lines.join("\n") }], structuredContent: { ...s, ready } };
-    },
+      }),
   );
 }

@@ -4,12 +4,12 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { ApiError, type Assignment, type Connection } from "../api-client.js";
 import { log } from "../log.js";
-import { withErrorHandling } from "./errors.js";
-import { findConnection } from "./connections.js";
+import { createOrFindAssignment } from "./assignments.js";
+import { createOrFindConnection } from "./connections.js";
 import { errorResult, resolveExperienceId, type ToolContext } from "./context.js";
-import { assignmentShape, connectionShape, e164, experienceIdInput, targetType, targetValueDescription, validateTarget } from "./schemas.js";
+import { withErrorHandling } from "./errors.js";
+import { assignmentShape, connectionShape, experienceIdInput, phoneInput, targetType, targetValueDescription, validateTarget } from "./schemas.js";
 
 export function registerEnableTool(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
@@ -21,10 +21,11 @@ export function registerEnableTool(server: McpServer, ctx: ToolContext): void {
         "account's connection INACTIVE or reuse the existing one, (3) create the assignment or reuse the existing one, " +
         "(4) activate the connection. Use this when the user says \"enable/turn on/onboard our experience for " +
         "<number or account>\". Post-Call: target_type ACCOUNT (default; target_value is resolved from the phone number's " +
-        "account, so it can be omitted). Virtual Agent: target_type PHONE_NUMBER. Safe to re-run; it reports what already " +
-        "existed. Confirm the customer and target with the user before calling, because activation starts media flow.",
+        "account, so it can be omitted). Virtual Agent: target_type PHONE_NUMBER. USER: target_value (the user id) is required. " +
+        "Safe to re-run; it reports what already existed, and it will re-activate a connection that was paused. " +
+        "Confirm the customer and target with the user before calling, because activation starts media flow.",
       inputSchema: {
-        telephone_number: e164.describe("A phone number on the customer's account, E.164. Resolves the account and, for PHONE_NUMBER targets, is the target itself unless target_value is given."),
+        telephone_number: phoneInput("A phone number on the customer's account").describe("A phone number on the customer's account, E.164, e.g. +14155551234. Resolves the account and, for PHONE_NUMBER targets, is the target itself unless target_value is given."),
         target_type: targetType.default("ACCOUNT").describe("ACCOUNT for Post-Call, PHONE_NUMBER for Virtual Agent, USER for a single user."),
         target_value: z.string().optional().describe(`Optional. ${targetValueDescription} Defaults: ACCOUNT uses the resolved account id; PHONE_NUMBER uses telephone_number.`),
         experience_id: experienceIdInput,
@@ -41,6 +42,9 @@ export function registerEnableTool(server: McpServer, ctx: ToolContext): void {
         const experienceId = resolveExperienceId(ctx, experience_id);
         const steps: Array<{ step: string; outcome: string }> = [];
 
+        if (target_type === "USER" && !target_value) {
+          return errorResult("target_value (the user id) is required when target_type is USER.");
+        }
         // Step 1: assignability. For ACCOUNT we do not know the id yet, so check the number.
         const checkType = target_type === "ACCOUNT" && !target_value ? "PHONE_NUMBER" : target_type;
         const checkValue = target_value ?? telephone_number;
@@ -53,34 +57,24 @@ export function registerEnableTool(server: McpServer, ctx: ToolContext): void {
         steps.push({ step: "check assignability", outcome: `${checkType} ${checkValue} is assignable` });
 
         // Step 2: connection (create INACTIVE or reuse).
-        let connection: Connection;
-        try {
-          connection = await ctx.api.createConnection(telephone_number, { experienceId, state: "INACTIVE" });
-          steps.push({ step: "connection", outcome: `created ${connection.id} (INACTIVE) for account ${connection.accountName ?? connection.accountId}` });
-        } catch (err) {
-          if (!(err instanceof ApiError) || err.status !== 409) throw err;
-          const existing = await findConnection(ctx, telephone_number, experienceId);
-          if (!existing) throw err;
-          connection = existing;
-          steps.push({ step: "connection", outcome: `reused existing ${connection.id} (${connection.state})` });
-        }
+        const found = await createOrFindConnection(ctx, telephone_number, experienceId, "INACTIVE");
+        let connection = found.connection;
+        steps.push({
+          step: "connection",
+          outcome: found.created
+            ? `created ${connection.id} (INACTIVE) for account ${connection.accountName ?? connection.accountId}`
+            : `reused existing ${connection.id} (${connection.state})`,
+        });
 
         // Step 3: assignment (create or reuse).
         const finalTarget = target_value ?? (target_type === "ACCOUNT" ? connection.accountId : telephone_number);
         const targetProblem = validateTarget(target_type, finalTarget);
         if (targetProblem) return errorResult(targetProblem);
-        let assignment: Assignment;
-        try {
-          assignment = await ctx.api.createAssignment({ experienceId, targetType: target_type, targetValue: finalTarget });
-          steps.push({ step: "assignment", outcome: `created ${assignment.id} for ${target_type} ${finalTarget}` });
-        } catch (err) {
-          if (!(err instanceof ApiError) || err.status !== 409) throw err;
-          const page = await ctx.api.listAssignments({ targetType: target_type, targetValue: finalTarget, pageSize: 50 });
-          const existing = page.entities.find((a) => a.experienceId === experienceId);
-          if (!existing) throw err;
-          assignment = existing;
-          steps.push({ step: "assignment", outcome: `reused existing ${assignment.id}` });
-        }
+        const { assignment, created } = await createOrFindAssignment(ctx, experienceId, target_type, finalTarget);
+        steps.push({
+          step: "assignment",
+          outcome: created ? `created ${assignment.id} for ${target_type} ${finalTarget}` : `reused existing ${assignment.id}`,
+        });
 
         // Step 4: activate.
         if (connection.state === "ACTIVE") {

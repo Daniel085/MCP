@@ -8,15 +8,28 @@ import { log } from "../log.js";
 import { usage } from "../usage.js";
 import { MissingInputError } from "./context.js";
 
-const SCOPE_BY_PATH: Array<[RegExp, string]> = [
-  [/assignability/, "experience-assignability:check"],
-  [/\/experience\/assignments/, "experience-assignments:manage"],
-  [/\/experience\/connections/, "experience-connections:manage"],
-  [/\/users/, "users:manage"],
+/** Scope and the tool that lists a resource, keyed by request path. */
+const BY_PATH: Array<[RegExp, { scope: string; listTool?: string }]> = [
+  [/assignability/, { scope: "experience-assignability:check" }],
+  [/\/experience\/assignments/, { scope: "experience-assignments:manage", listTool: "alianza_list_assignments" }],
+  [/\/experience\/connections/, { scope: "experience-connections:manage", listTool: "alianza_list_connections" }],
+  [/\/users/, { scope: "users:manage", listTool: "alianza_list_users" }],
 ];
 
-export function apiErrorToText(err: ApiError, context?: { path?: string }): string {
+function lookup(path: string | undefined) {
+  return BY_PATH.find(([re]) => re.test(path ?? ""))?.[1];
+}
+
+export interface ErrorContext {
+  /** Fallback when the ApiError carries no path (it normally does). */
+  path?: string;
+  /** Tailors the 404 text for delete tools. */
+  verb?: "delete";
+}
+
+export function apiErrorToText(err: ApiError, context?: ErrorContext): string {
   const trace = err.details.traceId ? ` (traceId ${err.details.traceId})` : "";
+  const info = lookup(err.details.path ?? context?.path);
   const fieldErrors = err.details.errors?.length
     ? "\n" + err.details.errors.map((e) => `- ${e.field ?? "field"}: ${e.message ?? JSON.stringify(e)}`).join("\n")
     : "";
@@ -25,16 +38,23 @@ export function apiErrorToText(err: ApiError, context?: { path?: string }): stri
       return `The Alianza API could not be reached (${err.message}). Try again shortly.`;
     case 401:
       return `Alianza rejected the token even after refreshing it. Run \`alianza-mcp login\` again.${trace}`;
-    case 403: {
-      const scope = SCOPE_BY_PATH.find(([re]) => re.test(context?.path ?? ""))?.[1];
-      return scope
-        ? `The token lacks the \`${scope}\` scope required for this operation. Re-run \`alianza-mcp login\` with that scope included.${trace}`
+    case 403:
+      return info
+        ? `The token lacks the \`${info.scope}\` scope required for this operation. Re-run \`alianza-mcp login\` with that scope included.${trace}`
         : `Forbidden: ${err.message}${trace}`;
+    case 404: {
+      const hint =
+        context?.verb === "delete"
+          ? " It may already be deleted, or the id is wrong."
+          : info?.listTool
+            ? ` Check the id, or find it with ${info.listTool}.`
+            : "";
+      return `Not found, or not visible to this token: ${err.message}.${hint}${trace}`;
     }
-    case 404:
-      return `Not found, or not visible to this token: ${err.message}${trace}`;
-    case 409:
-      return `Conflict: ${err.message}${trace}`;
+    case 409: {
+      const hint = info?.listTool ? ` Fetch the current state with ${info.listTool} before retrying.` : "";
+      return `Conflict: ${err.message}.${hint}${trace}`;
+    }
     case 400:
     case 422:
       return `Alianza rejected the request: ${err.message}${fieldErrors}${trace}`;
@@ -50,7 +70,7 @@ export function apiErrorToText(err: ApiError, context?: { path?: string }): stri
 export async function withErrorHandling(
   toolName: string,
   fn: () => Promise<CallToolResult>,
-  context?: { path?: string },
+  context?: ErrorContext,
 ): Promise<CallToolResult> {
   const started = Date.now();
   const ms = () => Date.now() - started;

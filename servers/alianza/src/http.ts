@@ -1,5 +1,5 @@
 /**
- * Streamable HTTP transport, stateless mode.
+ * Streamable HTTP transport, stateless mode with JSON responses.
  *
  * Every POST /mcp builds a fresh server and transport, handles the request,
  * and tears both down when the response closes. Nothing is kept between
@@ -54,7 +54,7 @@ export function createHttpApp(config: Config, ctx: ToolContext): Express {
 
   app.post(config.httpPath, async (req, res) => {
     const server = createServer(ctx);
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on("close", () => {
       void transport.close();
       void server.close();

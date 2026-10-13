@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "alianza": {
+      "command": "npx",
+      "args": ["-y", "alianza-mcp"]
+    }
+  }
+}

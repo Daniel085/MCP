@@ -7,6 +7,7 @@ This repo is a generic toolkit for building and deploying MCP servers. It is not
 - `docs/` holds the guides, numbered 00 to 09. Keep them in step with the templates: if you change an SDK call in a template, update the doc that shows it. `docs/08-worked-example.md` embeds code that was compiled and tested; if you change the template's structure, re-verify that example rather than editing its code blocks by hand.
 - `templates/typescript/` and `templates/python/` are complete, runnable servers. Each has a fake upstream API, tests, and a Dockerfile. They must stay in sync feature-for-feature.
 - `deploy/` holds client-side configuration examples only. No secrets, ever.
+- `servers/` holds concrete servers built from a template (currently `servers/alianza`). Each is self-contained: its own package, tests, Dockerfile, DESIGN.md, and deploy examples. Templates are not imported; fixes are pulled forward by hand.
 - `evals/` is the tool-selection harness. It is language-agnostic (drives any stdio server). Its unit tests run without an API key; `cases/*.yaml` need one. When you change a tool description in a template, run the matching cases file.
 
 ## Conventions

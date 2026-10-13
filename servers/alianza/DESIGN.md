@@ -2,6 +2,18 @@
 
 Wraps the Alianza **Crux API** (the Experience integration API used by the Post-Call and Virtual Agent guides). It does not cover the separate Alianza Public API v2 (partition/account provisioning), which is a different product. SIPREC and SIP media are network protocols, not REST, so they are out of scope for an MCP server; this server manages the control plane that turns them on.
 
+## Sources
+
+Read on 2026-09-10 from https://developer.alianza.com:
+
+- Guides: `/docs/guides/post-call`, `/docs/guides/virtual-agent`, `/docs/quickstart/post-call`
+- Reference: `/docs/reference/api` (API Explorer, "The Crux API 1.0.0"), `/docs/reference/conventions`, `/docs/reference/errors`, `/docs/reference/data-model`, `/docs/reference/schemas/experience-connection`
+- Authentication: `/docs/authentication/overview`, `/docs/authentication/client-credentials`, `/docs/authentication/authorization-code-pkce`, `/docs/authentication/home-realm-discovery`
+- Webhooks: `/docs/webhooks/overview`, `/docs/webhooks/event-reference`, `/docs/webhooks/tracking-user-counts`
+- `/docs/resources/known-issues`, `/docs/concepts/what-you-need-from-alianza`, `/docs/concepts/post-call-vs-virtual-agent`
+
+No downloadable OpenAPI document for the Crux API was found; the `openapi.yaml` at the site root describes the unrelated Public API v2. Alianza supplies the Crux spec at onboarding.
+
 ## Upstream inventory
 
 | Aspect | Value |
@@ -13,7 +25,7 @@ Wraps the Alianza **Crux API** (the Experience integration API used by the Post-
 | Authorize | `GET {auth}/authorize?response_type=code&client_id&redirect_uri&scope&state&code_challenge&code_challenge_method=S256&login_hint=<E.164>` (`login_hint` drives home-realm discovery). Confidential clients also send `client_secret` on exchange. |
 | Paging | Cursor-based: `pageSize` (1-100; users 1-200), `cursor`; response `{ entities, cursor, pageSize }`, users add `count`. Cursor is opaque and bound to the exact filter/sort. |
 | Errors | RFC 9457 problem details: `{ type?, title, status, detail?, instance?, traceId, errors? }`. 400 bad param, 401 token, 403 scope, 404 (also used for "not authorised to see"), 409 conflict, 422 invalid data, 429 rate limit (100 rps per credential), 5xx. |
-| IDs | UUIDs; phone numbers E.164. |
+| IDs | UUIDs (documented as RFC 4122); phone numbers E.164. Tool schemas accept any hex UUID shape rather than enforcing version bits, so a legitimate id is never rejected before the call. |
 
 ### Operations
 
@@ -87,4 +99,8 @@ Decisions:
 | 429 | "Rate limited (100 requests/second per credential). Retry after N seconds." |
 | 5xx / network | "Alianza API unavailable (HTTP n) traceId=…" |
 
-Every error includes `traceId` when Alianza returned one, so support tickets can reference it.
+Every error includes `traceId` when Alianza returned one, so support tickets can reference it. 404 and 409 messages name the list tool to call next; 403 names the missing scope, derived from the request path attached to every `ApiError`.
+
+## Files copied unchanged from the template
+
+`src/http.ts`, `src/log.ts`. Pull fixes forward from `templates/typescript/` when the template changes.

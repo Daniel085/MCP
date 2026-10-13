@@ -4,7 +4,20 @@ import { ApiError, type Connection } from "../api-client.js";
 import { log } from "../log.js";
 import { withErrorHandling } from "./errors.js";
 import { errorResult, resolveExperienceId, type ToolContext } from "./context.js";
-import { connectionShape, e164, experienceIdInput, pageShape, pagingHint, settableState, uuid } from "./schemas.js";
+import {
+  connectionShape,
+  cursorInput,
+  deletedShape,
+  EXAMPLE_E164,
+  EXAMPLE_UUID,
+  experienceIdInput,
+  idInput,
+  pageShape,
+  pageSizeInput,
+  pagingHint,
+  phoneInput,
+  settableState,
+} from "./schemas.js";
 
 export function describeConnection(c: Connection): string {
   const legacy = c.state === "CONNECTED" ? " (legacy value, behaves as INACTIVE)" : "";
@@ -14,7 +27,30 @@ export function describeConnection(c: Connection): string {
 /** Find the connection for a phone number's account and an experience, or null. */
 export async function findConnection(ctx: ToolContext, telephoneNumber: string, experienceId: string): Promise<Connection | null> {
   const page = await ctx.api.listConnections({ telephoneNumber, experienceId, pageSize: 10 });
-  return page.entities.find((c) => c.experienceId === experienceId) ?? page.entities[0] ?? null;
+  return page.entities.find((c) => c.experienceId === experienceId) ?? null;
+}
+
+/**
+ * Create the account's connection for an experience, or return the existing
+ * one when Alianza answers 409. Used by alianza_create_connection and the
+ * composite onboarding tool.
+ */
+export async function createOrFindConnection(
+  ctx: ToolContext,
+  telephoneNumber: string,
+  experienceId: string,
+  state: "ACTIVE" | "INACTIVE",
+): Promise<{ connection: Connection; created: boolean }> {
+  try {
+    const connection = await ctx.api.createConnection(telephoneNumber, { experienceId, state });
+    log.info("connection created", { id: connection.id, accountId: connection.accountId, state: connection.state });
+    return { connection, created: true };
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.status !== 409) throw err;
+    const existing = await findConnection(ctx, telephoneNumber, experienceId);
+    if (!existing) throw err;
+    return { connection: existing, created: false };
+  }
 }
 
 export function registerConnectionTools(server: McpServer, ctx: ToolContext): void {
@@ -27,11 +63,11 @@ export function registerConnectionTools(server: McpServer, ctx: ToolContext): vo
         "state (ACTIVE/INACTIVE) controls whether media flows for that account's assigned targets. Identify the account by " +
         "account_id or by any telephone_number on it. Use this to answer \"is our experience connected/active for this customer?\".",
       inputSchema: {
-        account_id: uuid.optional().describe("Account id. If given, telephone_number is ignored."),
-        telephone_number: e164.optional().describe("Any phone number on the account, E.164. Used when account_id is unknown."),
-        experience_id: uuid.optional().describe("Restrict to one Experience."),
-        page_size: z.number().int().min(1).max(100).default(50),
-        cursor: z.string().optional(),
+        account_id: idInput("Account").optional().describe(`Account id (UUID), e.g. ${EXAMPLE_UUID}. If given, telephone_number is ignored.`),
+        telephone_number: phoneInput("Any phone number on the account").optional().describe(`Any phone number on the account, E.164, e.g. ${EXAMPLE_E164}. Use this when you do not know the account id.`),
+        experience_id: idInput("Experience").optional().describe(`Restrict to one Experience id (UUID), e.g. ${EXAMPLE_UUID}. Omit to list connections for every Experience on the account.`),
+        page_size: pageSizeInput(100),
+        cursor: cursorInput,
       },
       outputSchema: { entities: z.array(z.object(connectionShape)), ...pageShape },
       annotations: { readOnlyHint: true, openWorldHint: true },
@@ -40,7 +76,9 @@ export function registerConnectionTools(server: McpServer, ctx: ToolContext): vo
       withErrorHandling(
         "alianza_list_connections",
         async () => {
-          if (!account_id && !telephone_number) return errorResult("Provide account_id or telephone_number.");
+          if (!account_id && !telephone_number) {
+            return errorResult("Provide account_id, or telephone_number (any phone number on the customer's account is enough).");
+          }
           const page = await ctx.api.listConnections({
             accountId: account_id,
             telephoneNumber: account_id ? undefined : telephone_number,
@@ -63,7 +101,7 @@ export function registerConnectionTools(server: McpServer, ctx: ToolContext): vo
     {
       title: "Get connection",
       description: "Fetch one Experience Connection by id. Use alianza_list_connections when you only know the account or a phone number.",
-      inputSchema: { connection_id: uuid.describe("Connection id (UUID).") },
+      inputSchema: { connection_id: idInput("Connection") },
       outputSchema: connectionShape,
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
@@ -88,7 +126,7 @@ export function registerConnectionTools(server: McpServer, ctx: ToolContext): vo
         "alianza_set_connection_state. If a connection already exists, returns the existing one instead of failing. " +
         "For the complete onboarding flow use alianza_enable_experience.",
       inputSchema: {
-        telephone_number: e164.describe("Any phone number on the customer's account, E.164."),
+        telephone_number: phoneInput("Any phone number on the customer's account"),
         experience_id: experienceIdInput,
         state: settableState.default("INACTIVE").describe("Initial state. Keep INACTIVE until assignments exist."),
       },
@@ -100,22 +138,11 @@ export function registerConnectionTools(server: McpServer, ctx: ToolContext): vo
         "alianza_create_connection",
         async () => {
           const experienceId = resolveExperienceId(ctx, experience_id);
-          try {
-            const c = await ctx.api.createConnection(telephone_number, { experienceId, state });
-            log.info("connection created", { id: c.id, accountId: c.accountId, state: c.state });
-            return {
-              content: [{ type: "text", text: `Created connection ${c.id} (${c.state}) for account ${c.accountName ?? c.accountId} (${c.accountId}). Use accountId ${c.accountId} for assignments.` }],
-              structuredContent: { ...c, created: true },
-            };
-          } catch (err) {
-            if (!(err instanceof ApiError) || err.status !== 409) throw err;
-            const existing = await findConnection(ctx, telephone_number, experienceId);
-            if (!existing) throw err;
-            return {
-              content: [{ type: "text", text: `A connection already exists for that account and experience:\n${describeConnection(existing)}` }],
-              structuredContent: { ...existing, created: false },
-            };
-          }
+          const { connection: c, created } = await createOrFindConnection(ctx, telephone_number, experienceId, state);
+          const text = created
+            ? `Created connection ${c.id} (${c.state}) for account ${c.accountName ?? c.accountId} (${c.accountId}). Use accountId ${c.accountId} for assignments.`
+            : `A connection already exists for that account and experience:\n${describeConnection(c)}`;
+          return { content: [{ type: "text", text }], structuredContent: { ...c, created } };
         },
         { path: "/experience/connections" },
       ),
@@ -131,8 +158,8 @@ export function registerConnectionTools(server: McpServer, ctx: ToolContext): vo
         "Confirm with the user before activating. If the connection is already in the requested state, reports that and " +
         "makes no change.",
       inputSchema: {
-        connection_id: uuid.describe("Connection id (UUID)."),
-        state: settableState,
+        connection_id: idInput("Connection"),
+        state: settableState.describe("ACTIVE starts media flow for every assigned target; INACTIVE pauses it."),
       },
       outputSchema: { ...connectionShape, changed: z.boolean() },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
@@ -168,7 +195,8 @@ export function registerConnectionTools(server: McpServer, ctx: ToolContext): vo
         "Delete an Experience Connection record. The Experience stops for the whole account. Prefer " +
         "alianza_set_connection_state INACTIVE to pause; delete only when the user explicitly wants the connection removed. " +
         "Ask the user to confirm.",
-      inputSchema: { connection_id: uuid.describe("Connection id (UUID).") },
+      inputSchema: { connection_id: idInput("Connection") },
+      outputSchema: deletedShape,
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     },
     async ({ connection_id }) =>
@@ -177,9 +205,9 @@ export function registerConnectionTools(server: McpServer, ctx: ToolContext): vo
         async () => {
           await ctx.api.deleteConnection(connection_id);
           log.info("connection deleted", { id: connection_id });
-          return { content: [{ type: "text", text: `Deleted connection ${connection_id}.` }] };
+          return { content: [{ type: "text", text: `Deleted connection ${connection_id}.` }], structuredContent: { id: connection_id, deleted: true } };
         },
-        { path: "/experience/connections" },
+        { path: "/experience/connections", verb: "delete" },
       ),
   );
 }

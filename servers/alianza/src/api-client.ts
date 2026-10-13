@@ -69,6 +69,8 @@ export class ApiError extends Error {
       traceId?: string;
       errors?: ProblemFieldError[];
       retryAfterSeconds?: number;
+      /** Request path, so error mapping can name the operation and its scope. */
+      path?: string;
     } = {},
   ) {
     super(message);
@@ -208,7 +210,7 @@ export class ApiClient {
       });
     } catch (err) {
       const reason = err instanceof Error && err.name === "AbortError" ? "timed out" : "unreachable";
-      throw new ApiError(0, `Alianza API ${reason}`);
+      throw new ApiError(0, `Alianza API ${reason}`, { path });
     } finally {
       clearTimeout(timer);
     }
@@ -216,7 +218,7 @@ export class ApiClient {
     if (res.status === 401 && !retried && (await this.auth.invalidate(kind))) {
       return this.request<T>(kind, method, path, opts, true);
     }
-    if (!res.ok) throw await toApiError(res);
+    if (!res.ok) throw await toApiError(res, path);
     if (res.status === 204) return undefined as T;
     const text = await res.text();
     return (text ? JSON.parse(text) : undefined) as T;
@@ -227,7 +229,7 @@ function enc(s: string): string {
   return encodeURIComponent(s);
 }
 
-async function toApiError(res: Response): Promise<ApiError> {
+async function toApiError(res: Response, path: string): Promise<ApiError> {
   const retryAfter = Number(res.headers.get("retry-after"));
   let problem: { title?: string; detail?: string; traceId?: string; errors?: ProblemFieldError[] } = {};
   try {
@@ -242,6 +244,7 @@ async function toApiError(res: Response): Promise<ApiError> {
     traceId: problem.traceId,
     errors: problem.errors,
     retryAfterSeconds: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined,
+    path,
   });
 }
 

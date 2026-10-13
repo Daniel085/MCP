@@ -101,6 +101,17 @@ The token file written by `login` is picked up automatically. Prompts to try:
 
 Tool-selection evals for these live in `evals/cases/alianza.yaml`.
 
+## Security review (per docs/06-security.md)
+
+1. **Worst case for a fully compromised model:** activate or deactivate the Experience for any account the signed-in Alianza user can reach, add or remove assignments, and read user names. It cannot delete users, place calls, read call content, or touch accounts outside that user's authorisation, because the API has no such operations and every call carries the user's own token.
+2. **What the host confirms:** `enable_experience`, `set_connection_state`, `create_assignment`, and `create_connection` are non-read-only and their descriptions ask for confirmation; both delete tools are `destructiveHint: true`, so hosts prompt.
+3. **What logs and errors reveal:** stderr logs carry ids, states, and `traceId`, never tokens or secrets. Error text returned to the model carries Alianza's `detail` and `traceId`. The usage log carries tool names and outcomes only.
+4. **Credential rotation:** the client secret is in the config file (mode 600) or environment; rotate at Alianza and re-run `setup`. The user token file is refreshed automatically and can be revoked by signing out at Alianza; `login` re-issues it.
+
+## Manual checks still to do
+
+The MCP Inspector pass (`npm run inspect`) and the first run against the real sandbox have not been done from the authoring environment, which has no browser and no Alianza credentials. Do both before the beta, and confirm the production base URL and the refresh grant shape noted in `DESIGN.md`.
+
 ## Deploy over HTTP
 
 Same as the template: `MCP_TRANSPORT=http`, `MCP_AUTH_TOKEN` for the bearer, `MCP_ALLOWED_HOSTS` when bound to a non-loopback address, and the multi-stage `Dockerfile`. Provide `ALIANZA_REFRESH_TOKEN` in the container's environment since there is no browser to log in with.
@@ -112,6 +123,7 @@ Same as the template: `MCP_TRANSPORT=http`, `MCP_AUTH_TOKEN` for the bearer, `MC
 | `src/index.ts` | Entry point and command dispatch. |
 | `src/cli/*.ts` | `setup`, `install`, `doctor`, flag parsing, prompts. |
 | `src/usage.ts` | Local usage log and summary. |
+| `deploy/` | What `install` writes for Claude Code and Claude Desktop, for manual setup. |
 | `src/auth.ts` | Token manager: client credentials, refresh, token file. |
 | `src/login.ts` | Authorization Code + PKCE on a loopback redirect. |
 | `src/api-client.ts` | Crux endpoints, problem-details errors, one 401 retry after refresh. |
