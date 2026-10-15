@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from mcp_evals.cases import Case, Expect
-from mcp_evals.runner import grade, run_case
+from mcp_evals.runner import extract_answer, grade, normalize_answer, run_case
 
 pytestmark = pytest.mark.anyio
 
@@ -138,6 +138,28 @@ async def test_turn_limit():
         case, create=client, tools=TOOLS, execute=execute_ok, model="m", system="s", max_turns=3
     )
     assert "did not finish within 3 turns" in r.failures
+
+
+def test_exact_answer_grading():
+    from mcp_evals.runner import CaseResult
+
+    def result_with(text):
+        r = CaseResult(case=Case("c", "p", Expect()))
+        r.final_text = text
+        return r
+
+    assert (
+        grade(Expect(answer_exact="Gamma Logistics"), result_with("Looked it up.\nANSWER: gamma logistics."))
+        == []
+    )
+    assert grade(Expect(answer_exact="3"), result_with("Counting...\nANSWER: 3")) == []
+    assert grade(Expect(answer_exact="3"), result_with("There are 3 of them.")) == [
+        "no 'ANSWER: ...' line in the final reply"
+    ]
+    assert grade(Expect(answer_exact="3"), result_with("ANSWER: 2")) == ["expected answer '3', got '2'"]
+    # The last ANSWER line wins when the model corrects itself.
+    assert extract_answer("ANSWER: 2\nWait.\nANSWER: 3") == "3"
+    assert normalize_answer('  "Kim".  ') == "kim"
 
 
 def test_grade_arg_subset_is_case_insensitive_for_strings():

@@ -25,6 +25,40 @@ uv run mcp-evals cases/items.yaml --model claude-sonnet-5
 
 Output, per case: PASS or FAIL, the tool calls the model made with their arguments, and each failed expectation. Exit code is non-zero if any case failed.
 
+## Two kinds of evaluation
+
+| Kind | File | Grades | Use it for |
+| --- | --- | --- | --- |
+| Tool selection | YAML `cases` | which tool was called, with which arguments | Checking descriptions: does the model reach for the right tool, including for writes? |
+| Question and answer | `<evaluation>` XML, run with `--qa` | the final answer, exactly | Checking the server lets the model answer realistic multi-step questions. Read-only. |
+
+Q&A files follow the mcp-builder guide's format and rules: ten or so questions, each independent, read-only, needing several tool calls, with one stable answer that can be checked by string comparison.
+
+```xml
+<evaluation>
+  <qa_pair>
+    <question>Which account has the most users among those with an ACTIVE connection? Answer with the account name.</question>
+    <answer>Gamma Logistics</answer>
+  </qa_pair>
+</evaluation>
+```
+
+```bash
+uv run mcp-evals cases/items.yaml --qa cases/items-qa.xml
+```
+
+In Q&A mode the system prompt tells the model to use only read-only tools and to finish with a line `ANSWER: <answer>`. That line is compared to the expected answer after lower-casing, collapsing whitespace, and stripping quotes and trailing punctuation. A reply with no `ANSWER:` line fails.
+
+Verify every expected answer yourself before committing a Q&A file, ideally with a test that computes it from the fake API, so a wrong key never blames the model.
+
+### Independence between cases
+
+If the server under test has state (writes in YAML cases, or a fake API that remembers them), add a `reset` block to the YAML suite and the harness calls it before every case:
+
+```yaml
+reset: { url: "http://127.0.0.1:4010/__reset" }   # method defaults to POST
+```
+
 ## Case file format
 
 ```yaml
@@ -45,6 +79,7 @@ cases:
       tools: [list_items, get_item]     # exact ordered sequence of every call
       no_tool: true                     # the model must not call any tool
       answer_contains: "Gadget"         # substring of the final reply, case-insensitive
+      answer_exact: "3"                 # the ANSWER: line, normalised (what --qa files use)
 ```
 
 `${VAR}` and `${VAR:-default}` expand from the environment anywhere in `server`. The server's `instructions` string is appended to the system prompt, as hosts do.
