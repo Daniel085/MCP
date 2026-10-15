@@ -17,6 +17,95 @@ import type { Assignment, Connection, UnifiedUser } from "./api-client.js";
 
 const MANAGE_SCOPES = "experience-connections:manage experience-assignments:manage users:manage offline_access";
 
+/** The partner's own experience (matches tests and evals) and another partner's. */
+export const SEED = {
+  E1: "e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1",
+  E2: "e2e2e2e2-e2e2-4e2e-8e2e-e2e2e2e2e2e2",
+  ACME: "11111111-1111-4111-8111-111111111111",
+  BETA: "22222222-2222-4222-8222-222222222222",
+  GAMMA: "33333333-3333-4333-8333-333333333333",
+  DELTA: "44444444-4444-4444-8444-444444444444",
+  EPSILON: "55555555-5555-4555-8555-555555555555",
+  ZETA: "66666666-6666-4666-8666-666666666666",
+} as const;
+
+const uid = (n: number) => `aaaaaaaa-0000-4000-8000-${String(n).padStart(12, "0")}`;
+const user = (n: number, accountId: string, first: string, last: string, created: string, updated: string | null = null): UnifiedUser => ({
+  id: uid(n),
+  accountId,
+  firstName: first,
+  lastName: last,
+  createdAt: created,
+  updatedAt: updated,
+});
+
+/**
+ * Six accounts. Acme and Beta start with no connections or assignments so
+ * the write tests can create them; Gamma, Delta, Epsilon, and Zeta carry
+ * pre-existing state that the read-only Q&A evaluation asks about.
+ */
+function seed(): { accounts: FakeAccount[]; users: UnifiedUser[]; connections: Connection[]; assignments: Assignment[] } {
+  const { E1, E2, ACME, BETA, GAMMA, DELTA, EPSILON, ZETA } = SEED;
+  const accounts: FakeAccount[] = [
+    { id: ACME, name: "Acme Communications", numbers: ["+14155551234", "+14155551235"] },
+    { id: BETA, name: "Beta Dental", numbers: ["+14155559999"] },
+    { id: GAMMA, name: "Gamma Logistics", numbers: ["+14155553001", "+14155553002", "+14155553003"] },
+    { id: DELTA, name: "Delta Clinics", numbers: ["+14155554001", "+14155554002"] },
+    { id: EPSILON, name: "Epsilon Retail", numbers: ["+14155555001"] },
+    { id: ZETA, name: "Zeta Studios", numbers: ["+14155556001"] },
+  ];
+  const users: UnifiedUser[] = [
+    user(1, ACME, "Jane", "Doe", "2026-03-15T14:22:00Z", "2026-03-18T09:15:30Z"),
+    user(2, ACME, "John", "Smith", "2026-03-16T08:00:00Z"),
+    user(3, ACME, "Ann", "Adams", "2026-03-17T08:00:00Z"),
+    user(4, BETA, "Bo", "Baker", "2026-04-01T08:00:00Z"),
+    user(5, GAMMA, "Carla", "Reyes", "2026-02-01T09:00:00Z"),
+    user(6, GAMMA, "Dev", "Patel", "2026-02-10T09:00:00Z"),
+    user(7, GAMMA, "Erin", "Chen", "2026-02-20T09:00:00Z"),
+    user(8, GAMMA, "Finn", "O'Neil", "2026-03-01T09:00:00Z"),
+    user(9, GAMMA, "Grace", "Kim", "2026-03-10T09:00:00Z"),
+    user(10, DELTA, "Hugo", "Lind", "2026-05-02T09:00:00Z"),
+    user(11, DELTA, "Ivy", "Park", "2026-05-03T09:00:00Z"),
+    user(12, EPSILON, "Jun", "Sato", "2026-06-01T09:00:00Z"),
+    user(13, EPSILON, "Kai", "Novak", "2026-06-02T09:00:00Z"),
+    user(14, EPSILON, "Lena", "Weiss", "2026-06-03T09:00:00Z"),
+    user(15, EPSILON, "Mo", "Adeyemi", "2026-06-04T09:00:00Z"),
+    user(16, ZETA, "Nia", "Brooks", "2026-07-01T09:00:00Z"),
+  ];
+  const at = "2026-08-01T12:00:00Z";
+  const conn = (id: string, accountId: string, experienceId: string, state: Connection["state"]): Connection => ({
+    id,
+    accountId,
+    accountName: accounts.find((a) => a.id === accountId)!.name,
+    experienceId,
+    state,
+    updatedAt: at,
+  });
+  const connections: Connection[] = [
+    conn("c3333333-0000-4000-8000-0000000000e1", GAMMA, E1, "ACTIVE"),
+    conn("c4444444-0000-4000-8000-0000000000e1", DELTA, E1, "INACTIVE"),
+    conn("c5555555-0000-4000-8000-0000000000e1", EPSILON, E1, "CONNECTED"),
+    conn("c5555555-0000-4000-8000-0000000000e2", EPSILON, E2, "ACTIVE"),
+  ];
+  const asg = (id: string, accountId: string, experienceId: string, targetType: Assignment["targetType"], targetValue: string): Assignment => ({
+    id,
+    experienceId,
+    accountId,
+    targetType,
+    targetValue,
+    updatedAt: at,
+  });
+  const assignments: Assignment[] = [
+    asg("a3333333-0000-4000-8000-000000000001", GAMMA, E1, "ACCOUNT", GAMMA),
+    asg("a3333333-0000-4000-8000-000000000002", GAMMA, E1, "USER", uid(6)),
+    asg("a4444444-0000-4000-8000-000000000001", DELTA, E1, "PHONE_NUMBER", "+14155554001"),
+    asg("a4444444-0000-4000-8000-000000000002", DELTA, E1, "PHONE_NUMBER", "+14155554002"),
+    asg("a5555555-0000-4000-8000-000000000001", EPSILON, E1, "PHONE_NUMBER", "+14155555001"),
+    asg("a5555555-0000-4000-8000-000000000002", EPSILON, E2, "ACCOUNT", EPSILON),
+  ];
+  return { accounts, users, connections, assignments };
+}
+
 interface FakeAccount {
   id: string;
   name: string;
@@ -28,20 +117,23 @@ export function createFakeApi() {
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
 
-  const accounts: FakeAccount[] = [
-    { id: "11111111-1111-4111-8111-111111111111", name: "Acme Communications", numbers: ["+14155551234", "+14155551235"] },
-    { id: "22222222-2222-4222-8222-222222222222", name: "Beta Dental", numbers: ["+14155559999"] },
-  ];
-  const users: UnifiedUser[] = [
-    { id: "aaaaaaaa-0000-4000-8000-000000000001", accountId: accounts[0].id, firstName: "Jane", lastName: "Doe", createdAt: "2026-03-15T14:22:00Z", updatedAt: "2026-03-18T09:15:30Z" },
-    { id: "aaaaaaaa-0000-4000-8000-000000000002", accountId: accounts[0].id, firstName: "John", lastName: "Smith", createdAt: "2026-03-16T08:00:00Z", updatedAt: null },
-    { id: "aaaaaaaa-0000-4000-8000-000000000003", accountId: accounts[0].id, firstName: "Ann", lastName: "Adams", createdAt: "2026-03-17T08:00:00Z", updatedAt: null },
-    { id: "aaaaaaaa-0000-4000-8000-000000000004", accountId: accounts[1].id, firstName: "Bo", lastName: "Baker", createdAt: "2026-04-01T08:00:00Z", updatedAt: null },
-  ];
-  const connections: Connection[] = [];
-  const assignments: Assignment[] = [];
+  const state = seed();
+  const accounts = state.accounts;
+  const users = state.users;
+  const connections = state.connections;
+  const assignments = state.assignments;
   let tokenCounter = 0;
   const issuedUserTokens = new Set<string>();
+
+  // Restore the seed. Lets evaluation runs keep cases independent.
+  app.post("/__reset", (_req, res) => {
+    const fresh = seed();
+    accounts.splice(0, accounts.length, ...fresh.accounts);
+    users.splice(0, users.length, ...fresh.users);
+    connections.splice(0, connections.length, ...fresh.connections);
+    assignments.splice(0, assignments.length, ...fresh.assignments);
+    res.status(204).end();
+  });
 
   const problem = (res: Response, status: number, title: string, detail?: string, errors?: unknown[]) =>
     res.status(status).type("application/problem+json").json({ title, status, detail, traceId: randomUUID(), ...(errors ? { errors } : {}) });

@@ -1,0 +1,55 @@
+<!--
+  Question/answer evaluation for alianza-mcp, in the mcp-builder guide's
+  format. Every question is independent, read-only, needs several chained
+  tool calls, and has one exact answer against the fake Crux API's seed data
+  (src/fake-api.ts). test/qa.test.ts derives each answer through the tool
+  surface, so a wrong key fails CI rather than blaming the model.
+
+  "Our experience" means the server's configured ALIANZA_EXPERIENCE_ID.
+
+  Run (needs ANTHROPIC_API_KEY):
+    (cd servers/alianza and run: npm run build, then node dist/fake-api.js in the background)
+    cd evals and run: uv run mcp-evals cases/alianza.yaml  with the qa option set to ../servers/alianza/evals/alianza-qa.xml
+-->
+<evaluation>
+  <qa_pair>
+    <question>Among the accounts that have an ACTIVE connection for our experience, which one has the most users? Answer with the account name.</question>
+    <answer>Gamma Logistics</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many users belong to the account that owns the phone number +14155554002?</question>
+    <answer>2</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>On the account that owns +14155553001, which user was created most recently? Answer with that user's last name.</question>
+    <answer>Kim</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many phone numbers on the Delta Clinics account have an assignment for our experience?</question>
+    <answer>2</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Is our experience's connection for the account that owns +14155555001 live right now? Answer ACTIVE or INACTIVE, treating the legacy CONNECTED state as INACTIVE.</question>
+    <answer>INACTIVE</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which user on the Gamma Logistics account has a USER-scoped assignment for our experience? Answer with their first and last name.</question>
+    <answer>Dev Patel</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many of the accounts visible to this server have no experience connection at all, for any experience?</question>
+    <answer>3</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Which account has connections for two different experiences? Answer with the account name.</question>
+    <answer>Epsilon Retail</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>Across all accounts, how many assignments for our experience target a PHONE_NUMBER?</question>
+    <answer>3</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>On the account that owns +14155553002, what is the first name of the user whose last name sorts last alphabetically?</question>
+    <answer>Carla</answer>
+  </qa_pair>
+</evaluation>

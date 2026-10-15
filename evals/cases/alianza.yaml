@@ -2,6 +2,11 @@
 #
 #   (cd servers/alianza && npm run build && npm run fake-api &)
 #   cd evals && uv run mcp-evals cases/alianza.yaml
+#
+# The read-only question/answer set lives next to the server:
+#   uv run mcp-evals cases/alianza.yaml --qa ../servers/alianza/evals/alianza-qa.xml
+#
+# The fake API is reset to its seed before every case, so cases are independent.
 
 server:
   command: node
@@ -16,6 +21,9 @@ server:
     ALIANZA_TOKEN_FILE: /tmp/alianza-evals-tokens.json
     MCP_TRANSPORT: stdio
     LOG_LEVEL: warn
+
+reset:
+  url: ${FAKE_API_URL:-http://127.0.0.1:4010}/__reset
 
 cases:
   - name: eligibility question uses check_assignability

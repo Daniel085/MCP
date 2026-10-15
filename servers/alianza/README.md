@@ -99,7 +99,7 @@ The token file written by `login` is picked up automatically. Prompts to try:
 | "How many users does account X have?" | `alianza_list_users` and reads `count` |
 | "Delete the connection" | Claude asks for confirmation, then `alianza_delete_connection` |
 
-Tool-selection evals for these live in `evals/cases/alianza.yaml`.
+Tool-selection evals for these live in `evals/cases/alianza.yaml`. A ten-question read-only evaluation in the mcp-builder format is in `evals/alianza-qa.xml`; `test/qa.test.ts` proves each answer is reachable through the tools against the fake API's seed.
 
 ## Security review (per docs/06-security.md)
 
