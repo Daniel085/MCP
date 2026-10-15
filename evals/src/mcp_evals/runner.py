@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -14,7 +15,28 @@ DEFAULT_SYSTEM = (
     "Before taking an action that changes data, state what you are about to do."
 )
 
+QA_SYSTEM = (
+    "You are an assistant connected to an MCP server. Answer the user's question by calling its tools; "
+    "chain as many calls as the question needs and only use read-only tools (never create, change, or delete anything). "
+    "When you have the answer, end your reply with a final line of exactly this form, and nothing after it:\n"
+    "ANSWER: <the answer, as short as possible>"
+)
+
 BETAS = ["server-side-fallback-2026-07-01"]
+
+_ANSWER_LINE = re.compile(r"^\s*ANSWER:\s*(.+?)\s*$", re.IGNORECASE | re.MULTILINE)
+
+
+def normalize_answer(text: str) -> str:
+    """Lowercase, collapse whitespace, strip wrapping quotes and trailing punctuation."""
+    t = re.sub(r"^[\s\"'`*]+|[\s\"'`*.!]+$", "", text)
+    t = re.sub(r"\s+", " ", t)
+    return t.lower()
+
+
+def extract_answer(final_text: str) -> str | None:
+    matches = _ANSWER_LINE.findall(final_text)
+    return matches[-1] if matches else None
 
 
 class CreateFn(Protocol):
@@ -153,5 +175,12 @@ def grade(expect: Expect, result: CaseResult) -> list[str]:
 
     if expect.answer_contains and expect.answer_contains.lower() not in result.final_text.lower():
         failures.append(f"final answer does not contain {expect.answer_contains!r}")
+
+    if expect.answer_exact is not None:
+        got = extract_answer(result.final_text)
+        if got is None:
+            failures.append("no 'ANSWER: ...' line in the final reply")
+        elif normalize_answer(got) != normalize_answer(expect.answer_exact):
+            failures.append(f"expected answer {expect.answer_exact!r}, got {got!r}")
 
     return failures

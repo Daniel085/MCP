@@ -1,0 +1,21 @@
+<!--
+  Question/answer evaluation for the template's Items server, in the format
+  from the mcp-builder guide: independent, read-only, one exact answer each.
+  Run:  uv run mcp-evals cases/items.yaml  with the qa option set to this file.
+  The fake Items API has only three records, so these are a format example;
+  a real server's set should need several chained calls per question.
+-->
+<evaluation>
+  <qa_pair>
+    <question>Which item was created most recently? Answer with its name.</question>
+    <answer>Gizmo</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>How many items have a description that mentions "extra features"?</question>
+    <answer>1</answer>
+  </qa_pair>
+  <qa_pair>
+    <question>What is the id of the item whose name starts with the letter W?</question>
+    <answer>itm_1</answer>
+  </qa_pair>
+</evaluation>

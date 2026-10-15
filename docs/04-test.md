@@ -85,6 +85,8 @@ uv run mcp-evals cases/items.yaml
 
 Run it after every change to a tool description. When a case fails, the fix is almost always a sentence in the description ("use X when ..., use Y when ..."), not code. See `evals/README.md` for the case format and a failure-to-fix table. The harness's own tests run in CI without an API key; the cases themselves cost real API calls and run on demand.
 
+The same harness also runs question-and-answer sets (`--qa file.xml`): ten or so independent, read-only questions that each need several chained tool calls and have one exact answer. Where the tool-selection cases check that the model picks the right tool, the Q&A set checks that the server lets it reach a correct answer. Write both for a real server, verify every expected answer with a test against the fake API, and if cases write data, give the suite a `reset` URL so each case starts clean. Format and rules are in `evals/README.md`.
+
 ## Claude Code (manual)
 
 Add the server for the current project only, try it, then remove it:
